@@ -1,0 +1,99 @@
+@import "tailwindcss";
+
+/*
+ * Дизайн-токены портала. Тема задаётся здесь и только здесь —
+ * новый портал = новая палитра/шрифты при том же коде.
+ * Стиль: ночное Сити — чернильный фон, шампань-золото, editorial-сериф.
+ */
+:root {
+  --ink: oklch(0.16 0.015 260);        /* почти чёрный с холодным подтоном */
+  --ink-soft: oklch(0.21 0.018 260);
+  --ink-line: oklch(0.32 0.02 260);
+  --paper: oklch(0.96 0.008 85);       /* тёплый off-white */
+  --paper-soft: oklch(0.93 0.01 85);
+  --gold: oklch(0.78 0.09 85);         /* шампань */
+  --gold-deep: oklch(0.68 0.1 80);
+  --muted: oklch(0.62 0.015 260);
+  --muted-on-paper: oklch(0.45 0.015 260);
+
+  --font-display: var(--font-prata), "Prata", serif;
+  --font-sans: var(--font-manrope), "Manrope", system-ui, sans-serif;
+}
+
+@theme inline {
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-line: var(--ink-line);
+  --color-paper: var(--paper);
+  --color-paper-soft: var(--paper-soft);
+  --color-gold: var(--gold);
+  --color-gold-deep: var(--gold-deep);
+  --color-muted: var(--muted);
+  --color-muted-paper: var(--muted-on-paper);
+  --font-display: var(--font-display);
+  --font-sans: var(--font-sans);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--gold);
+  color: var(--ink);
+}
+
+/* Тонкая золотая линейка-разделитель */
+.hairline {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold) 30%, var(--gold) 70%, transparent);
+  opacity: 0.45;
+}
+
+/* Появление блоков при скролле; уважает prefers-reduced-motion */
+@media (prefers-reduced-motion: no-preference) {
+  .reveal {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1), transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .reveal.is-visible {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Кен Бёрнс для hero-фото */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes kenburns {
+    from { transform: scale(1.06); }
+    to { transform: scale(1); }
+  }
+  .kenburns {
+    animation: kenburns 14s ease-out both;
+  }
+}
+
+/* Скроллбар каруселей убираем, скролл остаётся */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Фокус-кольца */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
