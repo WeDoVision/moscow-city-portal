@@ -3,6 +3,7 @@ import { portal } from "@/portal.config";
 import { fetchComplexes, fetchLots } from "@/lib/whitewill/client";
 import { Hero } from "@/components/Hero";
 import { Catalog } from "@/components/Catalog";
+import { CityMap3D } from "@/components/city3d/CityMap3D";
 import { TowersStrip } from "@/components/TowersStrip";
 import { AboutSection } from "@/components/AboutSection";
 import { FaqSection } from "@/components/FaqSection";
@@ -68,6 +69,8 @@ export default async function HomePage() {
     <main>
       <JsonLd data={jsonLd} />
       <Hero />
+
+      <CityMap3D complexes={complexes} />
 
       <section id="catalog" className="scroll-mt-20 py-20 md:py-24" aria-labelledby="catalog-title">
         <div className="mx-auto max-w-7xl px-5 md:px-8">

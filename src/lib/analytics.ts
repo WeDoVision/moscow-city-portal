@@ -24,6 +24,8 @@ export type FunnelEvent =
   | "gallery_interaction"
   | "tower_view"
   | "cta_click"
+  | "ai_chat_open"
+  | "ai_chat_message"
   | "lead_submit";
 
 type EventProps = Record<string, string | number | boolean | undefined>;

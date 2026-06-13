@@ -16,7 +16,11 @@ export type LotCard = {
   description: string;
   area: string;
   district: string;
-  complexTitle: string;
+  /** только у жилых лотов */
+  complexTitle?: string;
+  /** только у коммерческих лотов */
+  address?: string;
+  floor?: string;
   lotLink: string;
   isVisitable: boolean;
   images: string[];
@@ -54,11 +58,6 @@ export type ComplexCard = {
   complexCardPriceDTO: { price: number; priceFormatted: string; currency: string };
 };
 
-export type ComplexFilterResult = {
-  total: number;
-  moscowComplexCardDTOs: ComplexCard[];
-};
-
 export type GalleryImage = {
   category: string;
   url: string;
@@ -75,15 +74,43 @@ export type LotDetails = {
 
 export type DealType = "sale" | "rent";
 
+/**
+ * Категории недвижимости портала — как на старом портале (moscowcitysale.ru):
+ * Квартиры / Апартаменты — жилой сегмент API, Офисы / Ритейл — коммерческий.
+ * Маппинг на whitewill: kind/str_multiple_filter + выбор сегмента эндпоинта.
+ */
+export type Category = "flat" | "apartment" | "office" | "retail";
+
+export const CATEGORIES: {
+  value: Category;
+  label: string;
+  segment: "residential" | "commercials";
+  kind: string;
+}[] = [
+  { value: "apartment", label: "Апартаменты", segment: "residential", kind: "apartment" },
+  { value: "flat", label: "Квартиры", segment: "residential", kind: "flat" },
+  { value: "office", label: "Офисы", segment: "commercials", kind: "office" },
+  { value: "retail", label: "Ритейл", segment: "commercials", kind: "retail" },
+];
+
+export const categoryByValue = new Map(CATEGORIES.map((c) => [c.value, c]));
+
 /** Наши чистые параметры фильтра (URL портала) */
 export type CatalogQuery = {
   deal: DealType;
+  category?: Category;
   towers?: number[];
-  rooms?: string[]; // "0","1","2","3","4+"
+  rooms?: string[]; // "0","1","2","3","4+" — только жилой сегмент
   priceMin?: number;
   priceMax?: number;
   areaMin?: number;
   areaMax?: number;
   sort?: string; // "price_asc" | "price_desc" | "area_asc" | "area_desc"
   page?: number;
+};
+
+/** Счётчики для панели фильтров (как на старом портале) */
+export type CatalogCounts = {
+  categories: Record<Category | "all", number>;
+  towers: Record<number, number>;
 };

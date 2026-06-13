@@ -1,0 +1,242 @@
+import { NextRequest, NextResponse } from "next/server";
+import { portal } from "@/portal.config";
+import { fetchLots, imageUrl, lotHeadline, lotPrice } from "@/lib/whitewill/client";
+import type { CatalogQuery, Category } from "@/lib/whitewill/types";
+
+/**
+ * AI-агент подбора: LLM с tool calling поверх того же каталога.
+ * Модель мапит запрос пользователя ("однушка до 60 млн в ОКО") на фильтры
+ * whitewill API, получает реальные лоты и комментирует подбор.
+ * Ответ роута: { message, lots[], appliedFilters } — UI рисует карточки.
+ */
+
+export const maxDuration = 60;
+
+const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
+const MODEL = process.env.OPENAI_MODEL ?? "gpt-5.4-mini";
+
+const TOWER_LIST = portal.towers
+  .map((t) => `- ${t.name} (id=${t.id}): ${t.tagline}`)
+  .join("\n");
+
+const SYSTEM_PROMPT = `Ты — Алиса, эксперт-консультант портала «${portal.brand.name}» по недвижимости в небоскрёбах Москва-Сити.
+
+Башни портала:
+${TOWER_LIST}
+
+Правила:
+1. Когда пользователь описывает, что ищет, ВСЕГДА вызывай инструмент search_lots, мапя запрос на фильтры. «Однушка» = 1 спальня, «двушка» = 2 спальни, «студия» = 0. Цены пользователь называет в млн ₽ — переводи в рубли.
+2. Жильё — категории flat (квартиры) или apartment (апартаменты); офисы — office, торговые — retail. Если не уточнили — не передавай category.
+3. Фильтров «вид из окон», «этажность», «сторона света» в поиске нет: учитывай такие пожелания текстом (например, предложи верхние этажи и уточнение у эксперта), но не выдумывай фильтры.
+4. После поиска коротко прокомментируй результат: сколько нашлось, что показал, какие варианты интереснее под запрос и почему. Не перечисляй лоты списком — карточки покажет интерфейс. 2-4 предложения.
+5. Если ничего не нашлось — предложи ослабить бюджет/параметры и сразу сделай повторный поиск с ослабленными фильтрами.
+6. Отвечай по-русски, дружелюбно и по делу. Не выдумывай цены и факты — только данные из поиска.
+7. На вопросы про башни отвечай из их описаний выше; для показов и сделок предлагай оставить заявку или написать в WhatsApp/Telegram.`;
+
+const SEARCH_TOOL = {
+  type: "function",
+  function: {
+    name: "search_lots",
+    description:
+      "Поиск лотов в каталоге Москва-Сити по фильтрам. Возвращает реальные актуальные предложения.",
+    parameters: {
+      type: "object",
+      properties: {
+        deal: { type: "string", enum: ["sale", "rent"], description: "Купить или снять. По умолчанию sale." },
+        category: {
+          type: "string",
+          enum: ["flat", "apartment", "office", "retail"],
+          description: "Категория: flat=квартиры, apartment=апартаменты, office=офисы, retail=ритейл",
+        },
+        towers: {
+          type: "array",
+          items: { type: "integer" },
+          description: `id башен из списка (${portal.towers.map((t) => `${t.id}=${t.name}`).join(", ")})`,
+        },
+        rooms: {
+          type: "array",
+          items: { type: "string", enum: ["0", "1", "2", "3", "4+"] },
+          description: "Спальни: 0=студия",
+        },
+        priceMin: { type: "integer", description: "Мин. цена в РУБЛЯХ (не млн!)" },
+        priceMax: { type: "integer", description: "Макс. цена в РУБЛЯХ (не млн!)" },
+        areaMin: { type: "integer", description: "Мин. площадь м²" },
+        areaMax: { type: "integer", description: "Макс. площадь м²" },
+        sort: {
+          type: "string",
+          enum: ["price_asc", "price_desc", "area_asc", "area_desc"],
+        },
+      },
+    },
+  },
+};
+
+type ChatMessage = {
+  role: "system" | "user" | "assistant" | "tool";
+  content: string | null;
+  tool_calls?: { id: string; type: string; function: { name: string; arguments: string } }[];
+  tool_call_id?: string;
+};
+
+type CompactLot = {
+  id: number;
+  headline: string;
+  title: string;
+  price: string;
+  pricePerArea: string;
+  badge: string;
+  image: string | null;
+};
+
+function compactLot(card: Parameters<typeof lotHeadline>[0]): CompactLot {
+  const price = lotPrice(card);
+  return {
+    id: card.id,
+    headline: lotHeadline(card),
+    title: card.title,
+    price: price?.priceFormatted ?? "Цена по запросу",
+    pricePerArea: price?.pricePerAreaFormatted ?? "",
+    badge: card.complexTitle ?? card.address ?? card.district,
+    image: card.images[0] ? imageUrl(card.images[0], 310) : null,
+  };
+}
+
+export async function POST(req: NextRequest) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json({ error: "assistant_not_configured" }, { status: 503 });
+  }
+
+  let body: { messages?: { role: "user" | "assistant"; content: string }[] };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "bad_json" }, { status: 400 });
+  }
+  const history = (body.messages ?? []).slice(-12);
+  if (!history.length || history[history.length - 1].role !== "user") {
+    return NextResponse.json({ error: "no_user_message" }, { status: 422 });
+  }
+
+  const messages: ChatMessage[] = [
+    { role: "system", content: SYSTEM_PROMPT },
+    ...history.map((m) => ({ role: m.role, content: m.content }) as ChatMessage),
+  ];
+
+  // показываем пользователю последний НЕпустой поиск (модель может сделать
+  // несколько попыток: пустой результат → ослабленные фильтры)
+  let lots: CompactLot[] = [];
+  let total = 0;
+  let appliedFilters: Partial<CatalogQuery> | null = null;
+  let lastEmptyFilters: Partial<CatalogQuery> | null = null;
+
+  try {
+    // до 3 раундов tool calling
+    for (let round = 0; round < 3; round++) {
+      const res = await fetch(OPENAI_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          messages,
+          tools: [SEARCH_TOOL],
+          tool_choice: "auto",
+          max_completion_tokens: 700,
+        }),
+      });
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error("[assistant] openai error", res.status, errText.slice(0, 500));
+        return NextResponse.json({ error: "llm_error" }, { status: 502 });
+      }
+      const data = await res.json();
+      const msg = data.choices?.[0]?.message;
+      if (!msg) return NextResponse.json({ error: "llm_empty" }, { status: 502 });
+
+      if (msg.tool_calls?.length) {
+        messages.push(msg);
+        for (const tc of msg.tool_calls) {
+          let args: Record<string, unknown> = {};
+          try {
+            args = JSON.parse(tc.function.arguments || "{}");
+          } catch {
+            // некорректные аргументы — ищем без фильтров
+          }
+          const q: CatalogQuery = {
+            deal: args.deal === "rent" ? "rent" : "sale",
+            category: ["flat", "apartment", "office", "retail"].includes(
+              args.category as string,
+            )
+              ? (args.category as Category)
+              : undefined,
+            towers: Array.isArray(args.towers)
+              ? (args.towers as number[]).filter((n) =>
+                  portal.towers.some((t) => t.id === n),
+                )
+              : undefined,
+            rooms: Array.isArray(args.rooms) ? (args.rooms as string[]) : undefined,
+            priceMin: typeof args.priceMin === "number" ? args.priceMin : undefined,
+            priceMax: typeof args.priceMax === "number" ? args.priceMax : undefined,
+            areaMin: typeof args.areaMin === "number" ? args.areaMin : undefined,
+            areaMax: typeof args.areaMax === "number" ? args.areaMax : undefined,
+            sort: typeof args.sort === "string" ? args.sort : undefined,
+            page: 1,
+          };
+          let toolResult: string;
+          try {
+            const result = await fetchLots(q, 300);
+            const found = result.moscowLotCardDTOs.slice(0, 6).map(compactLot);
+            if (result.total > 0 || !lots.length) {
+              lots = found;
+              total = result.total;
+              appliedFilters = result.total > 0 ? q : appliedFilters;
+            }
+            if (result.total === 0) lastEmptyFilters = q;
+            toolResult = JSON.stringify({
+              total: result.total,
+              shown: found.length,
+              lots: found.map((l) => ({
+                id: l.id,
+                headline: l.headline,
+                price: l.price,
+                tower: l.badge,
+              })),
+            });
+          } catch (e) {
+            console.error("[assistant] search error", e);
+            toolResult = JSON.stringify({ error: "search_failed" });
+          }
+          messages.push({
+            role: "tool",
+            tool_call_id: tc.id,
+            content: toolResult,
+          });
+        }
+        continue;
+      }
+
+      // финальный текстовый ответ
+      return NextResponse.json({
+        message: msg.content ?? "",
+        lots,
+        total,
+        appliedFilters: appliedFilters ?? lastEmptyFilters,
+      });
+    }
+    // исчерпали раунды — отдаём, что есть
+    return NextResponse.json({
+      message: total
+        ? `Нашла ${total} вариантов, показала первые ${lots.length}. Уточните бюджет или башню — сузим подбор.`
+        : "Не получилось завершить подбор, попробуйте переформулировать запрос.",
+      lots,
+      total,
+      appliedFilters,
+    });
+  } catch (e) {
+    console.error("[assistant]", e);
+    return NextResponse.json({ error: "assistant_error" }, { status: 500 });
+  }
+}

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import type { LotCard as LotCardType } from "@/lib/whitewill/types";
-import { imageUrl } from "@/lib/whitewill/client";
+import { imageUrl, lotHeadline } from "@/lib/whitewill/client";
 import { track } from "@/lib/analytics";
 
 const FALLBACK =
@@ -15,14 +15,14 @@ const FALLBACK =
 export function LotCard({ lot }: { lot: LotCardType }) {
   const [imgIdx, setImgIdx] = useState(0);
   const price = lot.lotCardPriceListDTO.lotCardPriceItemDTOs.find((p) => p.currency === "RUB");
-  const info = lot.lotCardInfoListDTO.lotCardInfoItemDTOs;
   const transit = lot.lotCardTransitListDTO.lotCardTransitItemDTOs[0];
   const images = lot.images.length ? lot.images : [""];
+  const badge = lot.complexTitle ?? lot.address ?? lot.district;
 
   return (
     <Link
       href={`/lots/${lot.id}`}
-      onClick={() => track("lot_card_click", { lotId: lot.id, complex: lot.complexTitle })}
+      onClick={() => track("lot_card_click", { lotId: lot.id, complex: badge })}
       className="group block overflow-hidden rounded-sm border border-ink-line/40 bg-ink-soft transition-all duration-300 hover:-translate-y-1 hover:border-gold/50"
     >
       <div
@@ -45,7 +45,7 @@ export function LotCard({ lot }: { lot: LotCardType }) {
           onError={(e) => {
             (e.target as HTMLImageElement).src = FALLBACK;
           }}
-          alt={lot.title}
+          alt={lotHeadline(lot)}
           loading="lazy"
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
         />
@@ -60,24 +60,22 @@ export function LotCard({ lot }: { lot: LotCardType }) {
           </div>
         )}
         <span className="absolute left-3 top-3 rounded-full bg-ink/70 px-3 py-1 text-xs tracking-wide text-paper/90 backdrop-blur">
-          {lot.complexTitle}
+          {badge}
         </span>
       </div>
 
       <div className="p-5">
-        <p className="font-display text-xl text-gold">{price?.priceFormatted ?? "Цена по запросу"}</p>
+        {/* информативный заголовок — как на старом портале */}
+        <h3 className="font-display text-lg leading-snug text-paper">{lotHeadline(lot)}</h3>
+        <p className="mt-1 line-clamp-1 text-xs text-muted">{lot.title}</p>
+
+        <p className="mt-3 font-display text-xl text-gold">
+          {price?.priceFormatted ?? "Цена по запросу"}
+        </p>
         {price && price.pricePerAreaFormatted && (
           <p className="mt-0.5 text-xs text-muted">{price.pricePerAreaFormatted}</p>
         )}
-        <p className="mt-3 line-clamp-2 min-h-[2.5rem] text-sm leading-snug text-paper/85">{lot.title}</p>
 
-        <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
-          {info.map((i) => (
-            <span key={i.title}>
-              <span className="text-paper/70">{i.value}</span> {i.title.toLowerCase()}
-            </span>
-          ))}
-        </div>
         {transit && (
           <p className="mt-3 flex items-center gap-1.5 text-xs text-muted">
             <span className="inline-block h-2 w-2 rounded-full" style={{ background: transit.color }} />

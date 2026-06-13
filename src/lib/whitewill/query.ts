@@ -1,8 +1,8 @@
-import type { CatalogQuery } from "./types";
+import { categoryByValue, type CatalogQuery, type Category } from "./types";
 
 /**
  * Парсинг чистых URL-параметров портала в CatalogQuery.
- * ?deal=sale&towers=1,107&rooms=2,3&priceMin=...&priceMax=...&areaMin=...&areaMax=...&sort=price_asc&page=2
+ * ?deal=sale&category=flat&towers=1,107&rooms=2,3&priceMin=...&priceMax=...&areaMin=...&areaMax=...&sort=price_asc&page=2
  */
 export function parseCatalogQuery(
   sp: Record<string, string | string[] | undefined> | URLSearchParams,
@@ -21,8 +21,10 @@ export function parseCatalogQuery(
     const n = s ? parseInt(s, 10) : NaN;
     return Number.isNaN(n) ? undefined : n;
   };
+  const cat = get("category");
   return {
     deal: get("deal") === "rent" ? "rent" : "sale",
+    category: cat && categoryByValue.has(cat as Category) ? (cat as Category) : undefined,
     towers: nums(get("towers")),
     rooms: get("rooms")?.split(",").filter(Boolean),
     priceMin: num(get("priceMin")),
@@ -37,6 +39,7 @@ export function parseCatalogQuery(
 export function catalogQueryToParams(q: CatalogQuery): URLSearchParams {
   const p = new URLSearchParams();
   if (q.deal === "rent") p.set("deal", "rent");
+  if (q.category) p.set("category", q.category);
   if (q.towers?.length) p.set("towers", q.towers.join(","));
   if (q.rooms?.length) p.set("rooms", q.rooms.join(","));
   if (q.priceMin != null) p.set("priceMin", String(q.priceMin));

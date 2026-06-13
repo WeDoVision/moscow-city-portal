@@ -3,7 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { portal } from "@/portal.config";
-import type { CatalogQuery, LotFilterResult } from "@/lib/whitewill/types";
+import {
+  CATEGORIES,
+  type CatalogCounts,
+  type CatalogQuery,
+  type LotFilterResult,
+} from "@/lib/whitewill/types";
 import { catalogQueryToParams, parseCatalogQuery } from "@/lib/whitewill/query";
 import { track } from "@/lib/analytics";
 import { LotCard } from "./LotCard";
@@ -23,14 +28,15 @@ const SORT_OPTIONS = [
   { value: "area_desc", label: "По убыванию площади" },
 ];
 
-function fmtMln(n: number | undefined, suffix: string): string {
+function fmtMln(n: number | undefined): string {
   if (n == null) return "";
   return n >= 1_000_000 ? String(Math.round(n / 1_000_000)) : String(n);
 }
 
 /**
  * Динамический каталог: фильтры ↔ URL ↔ /api/lots (прокси whitewill).
- * Первый рендер приходит с сервера (initial), дальше — клиентская фильтрация.
+ * Набор фильтров повторяет старый портал: сделка, категория (со счётчиками),
+ * башня (со счётчиками), цена, площадь + спальни/сортировка как на whitewill.
  */
 export function Catalog({ initial }: { initial: LotFilterResult }) {
   const router = useRouter();
@@ -38,10 +44,12 @@ export function Catalog({ initial }: { initial: LotFilterResult }) {
   const [query, setQuery] = useState<CatalogQuery>(() => parseCatalogQuery(searchParams));
   const [result, setResult] = useState<LotFilterResult>(initial);
   const [lots, setLots] = useState(initial.moscowLotCardDTOs);
+  const [counts, setCounts] = useState<CatalogCounts | null>(null);
   const [loading, setLoading] = useState(false);
-  const [priceDraft, setPriceDraft] = useState<{ min: string; max: string }>({
-    min: fmtMln(query.priceMin, ""),
-    max: fmtMln(query.priceMax, ""),
+  const [priceDraft, setPriceDraft] = useState({ min: fmtMln(query.priceMin), max: fmtMln(query.priceMax) });
+  const [areaDraft, setAreaDraft] = useState({
+    min: query.areaMin?.toString() ?? "",
+    max: query.areaMax?.toString() ?? "",
   });
   const firstRender = useRef(true);
   const abortRef = useRef<AbortController | null>(null);
@@ -49,6 +57,26 @@ export function Catalog({ initial }: { initial: LotFilterResult }) {
   const apply = useCallback((patch: Partial<CatalogQuery>) => {
     setQuery((q) => ({ ...q, ...patch, page: patch.page ?? 1 }));
   }, []);
+
+  // внешние компоненты (3D-карта, AI-агент) применяют фильтры событием
+  useEffect(() => {
+    const onApply = (e: Event) => {
+      const detail = (e as CustomEvent).detail as Partial<CatalogQuery>;
+      apply({ ...detail });
+    };
+    window.addEventListener("portal:applyFilters", onApply);
+    return () => window.removeEventListener("portal:applyFilters", onApply);
+  }, [apply]);
+
+  // счётчики категорий/башен — отдельный, более редкий запрос
+  useEffect(() => {
+    const p = new URLSearchParams({ deal: query.deal });
+    if (query.category) p.set("category", query.category);
+    fetch(`/api/counts?${p}`)
+      .then((r) => (r.ok ? (r.json() as Promise<CatalogCounts>) : null))
+      .then((c) => c && setCounts(c))
+      .catch(() => {});
+  }, [query.deal, query.category]);
 
   // запрос при изменении фильтров + синк URL
   useEffect(() => {
@@ -62,10 +90,13 @@ export function Catalog({ initial }: { initial: LotFilterResult }) {
     router.replace(`/?${params}#catalog`, { scroll: false });
     track("filter_change", {
       deal: query.deal,
+      category: query.category ?? "all",
       towers: query.towers?.join(",") ?? "all",
       rooms: query.rooms?.join(",") ?? "any",
       priceMin: query.priceMin,
       priceMax: query.priceMax,
+      areaMin: query.areaMin,
+      areaMax: query.areaMax,
       sort: query.sort,
     });
 
@@ -116,25 +147,41 @@ export function Catalog({ initial }: { initial: LotFilterResult }) {
     apply({ priceMin: mln(priceDraft.min), priceMax: mln(priceDraft.max) });
   };
 
+  const commitArea = () => {
+    const int = (s: string) => {
+      const n = parseInt(s, 10);
+      return Number.isNaN(n) ? undefined : n;
+    };
+    apply({ areaMin: int(areaDraft.min), areaMax: int(areaDraft.max) });
+  };
+
+  const isResidential = !query.category || query.category === "flat" || query.category === "apartment";
+
   const hasFilters = useMemo(
     () =>
       Boolean(
-        query.towers?.length ||
+        query.category ||
+          query.towers?.length ||
           query.rooms?.length ||
           query.priceMin != null ||
           query.priceMax != null ||
+          query.areaMin != null ||
+          query.areaMax != null ||
           query.deal === "rent" ||
           query.sort,
       ),
     [query],
   );
 
+  const cnt = (n: number | undefined) =>
+    counts && n != null ? <span className="ml-1.5 text-xs opacity-60">{n}</span> : null;
+
   return (
     <div>
       {/* ── Панель фильтров ─────────────────────────────────────────── */}
       <div className="rounded-sm border border-ink-line/40 bg-ink-soft/60 p-5 backdrop-blur md:p-6">
+        {/* сделка + категории */}
         <div className="flex flex-wrap items-center gap-3">
-          {/* Тип сделки */}
           <div className="flex rounded-full border border-ink-line/60 p-1" role="group" aria-label="Тип сделки">
             {(["sale", "rent"] as const).map((d) => (
               <button
@@ -150,26 +197,57 @@ export function Catalog({ initial }: { initial: LotFilterResult }) {
             ))}
           </div>
 
-          {/* Спальни */}
-          <div className="flex items-center gap-1 rounded-full border border-ink-line/60 p-1" role="group" aria-label="Спальни">
-            <span className="pl-3 pr-1 text-xs text-muted">Спальни</span>
-            {ROOM_OPTIONS.map((r) => (
+          <div className="no-scrollbar flex gap-2 overflow-x-auto" role="group" aria-label="Категория недвижимости">
+            <button
+              onClick={() => apply({ category: undefined })}
+              aria-pressed={!query.category}
+              className={`shrink-0 rounded-full border px-4 py-1.5 text-sm transition-colors ${
+                !query.category
+                  ? "border-gold bg-gold/15 text-gold"
+                  : "border-ink-line/60 text-paper/70 hover:border-paper/40 hover:text-paper"
+              }`}
+            >
+              Все{cnt(counts?.categories.all)}
+            </button>
+            {CATEGORIES.map((c) => (
               <button
-                key={r.value}
-                onClick={() => toggleRoom(r.value)}
-                aria-pressed={query.rooms?.includes(r.value) ?? false}
-                className={`min-w-9 rounded-full px-3 py-1.5 text-sm transition-colors ${
-                  query.rooms?.includes(r.value)
-                    ? "bg-gold text-ink"
-                    : "text-paper/70 hover:text-paper"
+                key={c.value}
+                onClick={() => apply({ category: query.category === c.value ? undefined : c.value })}
+                aria-pressed={query.category === c.value}
+                className={`shrink-0 rounded-full border px-4 py-1.5 text-sm transition-colors ${
+                  query.category === c.value
+                    ? "border-gold bg-gold/15 text-gold"
+                    : "border-ink-line/60 text-paper/70 hover:border-paper/40 hover:text-paper"
                 }`}
               >
-                {r.label}
+                {c.label}
+                {cnt(counts?.categories[c.value])}
               </button>
             ))}
           </div>
+        </div>
 
-          {/* Цена */}
+        {/* башни со счётчиками */}
+        <div className="no-scrollbar mt-4 flex gap-2 overflow-x-auto" role="group" aria-label="Башни">
+          {portal.towers.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => toggleTower(t.id)}
+              aria-pressed={query.towers?.includes(t.id) ?? false}
+              className={`shrink-0 rounded-full border px-4 py-1.5 text-sm transition-colors ${
+                query.towers?.includes(t.id)
+                  ? "border-gold bg-gold/15 text-gold"
+                  : "border-ink-line/60 text-paper/70 hover:border-paper/40 hover:text-paper"
+              }`}
+            >
+              {t.name}
+              {cnt(counts?.towers[t.id])}
+            </button>
+          ))}
+        </div>
+
+        {/* диапазоны и сортировка */}
+        <div className="mt-4 flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 rounded-full border border-ink-line/60 px-4 py-1.5">
             <span className="text-xs text-muted">Цена, млн ₽</span>
             <input
@@ -195,7 +273,51 @@ export function Catalog({ initial }: { initial: LotFilterResult }) {
             />
           </div>
 
-          {/* Сортировка */}
+          <div className="flex items-center gap-2 rounded-full border border-ink-line/60 px-4 py-1.5">
+            <span className="text-xs text-muted">Площадь, м²</span>
+            <input
+              inputMode="numeric"
+              placeholder="от"
+              value={areaDraft.min}
+              onChange={(e) => setAreaDraft((p) => ({ ...p, min: e.target.value }))}
+              onBlur={commitArea}
+              onKeyDown={(e) => e.key === "Enter" && commitArea()}
+              className="w-14 bg-transparent text-sm text-paper placeholder:text-muted/60 focus:outline-none"
+              aria-label="Площадь от, м²"
+            />
+            <span className="text-muted">—</span>
+            <input
+              inputMode="numeric"
+              placeholder="до"
+              value={areaDraft.max}
+              onChange={(e) => setAreaDraft((p) => ({ ...p, max: e.target.value }))}
+              onBlur={commitArea}
+              onKeyDown={(e) => e.key === "Enter" && commitArea()}
+              className="w-14 bg-transparent text-sm text-paper placeholder:text-muted/60 focus:outline-none"
+              aria-label="Площадь до, м²"
+            />
+          </div>
+
+          {isResidential && (
+            <div className="flex items-center gap-1 rounded-full border border-ink-line/60 p-1" role="group" aria-label="Спальни">
+              <span className="pl-3 pr-1 text-xs text-muted">Спальни</span>
+              {ROOM_OPTIONS.map((r) => (
+                <button
+                  key={r.value}
+                  onClick={() => toggleRoom(r.value)}
+                  aria-pressed={query.rooms?.includes(r.value) ?? false}
+                  className={`min-w-9 rounded-full px-3 py-1.5 text-sm transition-colors ${
+                    query.rooms?.includes(r.value)
+                      ? "bg-gold text-ink"
+                      : "text-paper/70 hover:text-paper"
+                  }`}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+          )}
+
           <select
             value={query.sort ?? "price_asc"}
             onChange={(e) => apply({ sort: e.target.value })}
@@ -213,6 +335,7 @@ export function Catalog({ initial }: { initial: LotFilterResult }) {
             <button
               onClick={() => {
                 setPriceDraft({ min: "", max: "" });
+                setAreaDraft({ min: "", max: "" });
                 setQuery({ deal: "sale", page: 1 });
               }}
               className="text-sm text-muted underline-offset-4 transition-colors hover:text-gold hover:underline"
@@ -220,24 +343,6 @@ export function Catalog({ initial }: { initial: LotFilterResult }) {
               Сбросить
             </button>
           )}
-        </div>
-
-        {/* Башни */}
-        <div className="no-scrollbar mt-4 flex gap-2 overflow-x-auto" role="group" aria-label="Башни">
-          {portal.towers.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => toggleTower(t.id)}
-              aria-pressed={query.towers?.includes(t.id) ?? false}
-              className={`shrink-0 rounded-full border px-4 py-1.5 text-sm transition-colors ${
-                query.towers?.includes(t.id)
-                  ? "border-gold bg-gold/15 text-gold"
-                  : "border-ink-line/60 text-paper/70 hover:border-paper/40 hover:text-paper"
-              }`}
-            >
-              {t.name}
-            </button>
-          ))}
         </div>
       </div>
 

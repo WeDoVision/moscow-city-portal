@@ -5,6 +5,8 @@ import { portal } from "@/portal.config";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { PageViewTracker } from "@/components/PageViewTracker";
+import { FloatingMessengers } from "@/components/MessengerButtons";
+import { AssistantChat } from "@/components/AssistantChat";
 import "./globals.css";
 
 const manrope = Manrope({
@@ -50,6 +52,8 @@ export default function RootLayout({
         <Header />
         {children}
         <Footer />
+        <FloatingMessengers />
+        <AssistantChat />
         <PageViewTracker />
         {GA_ID && (
           <>

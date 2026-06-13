@@ -2,10 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { portal } from "@/portal.config";
-import { fetchLotDetails, fetchLots, lotInfo, lotPrice } from "@/lib/whitewill/client";
-import type { DealType } from "@/lib/whitewill/types";
+import { fetchLotDetails, fetchLots, lotHeadline, lotInfo, lotPrice } from "@/lib/whitewill/client";
 import { LotGallery } from "@/components/LotGallery";
 import { LeadForm } from "@/components/LeadForm";
+import { LotMessengerButtons } from "@/components/MessengerButtons";
 import { JsonLd } from "@/components/JsonLd";
 import { LotViewTracker } from "@/components/LotViewTracker";
 
@@ -29,13 +29,8 @@ export async function generateStaticParams() {
 async function getDetails(idStr: string) {
   const id = parseInt(idStr, 10);
   if (Number.isNaN(id)) return null;
-  // лот может быть и в продаже, и в аренде — пробуем оба скоупа
-  const scopes: DealType[] = ["sale", "rent"];
-  for (const deal of scopes) {
-    const details = await fetchLotDetails(id, deal);
-    if (details) return details;
-  }
-  return null;
+  // скоупы (продажа/аренда/коммерция) перебираются внутри клиента
+  return fetchLotDetails(id);
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -44,7 +39,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!details) return { title: "Лот не найден" };
   const { card } = details;
   const price = lotPrice(card);
-  const title = `${card.title} — ${card.complexTitle}, ${price?.priceFormatted ?? ""}`;
+  const title = `${lotHeadline(card)} — ${card.complexTitle ?? card.address ?? "Москва-Сити"}, ${price?.priceFormatted ?? ""}`;
   const description = (details.fullDescription ?? card.description).slice(0, 300);
   return {
     title,
@@ -112,7 +107,7 @@ export default async function LotPage({ params }: Props) {
   return (
     <main className="pb-24 pt-28">
       <JsonLd data={jsonLd} />
-      <LotViewTracker lotId={card.id} complex={card.complexTitle} />
+      <LotViewTracker lotId={card.id} complex={card.complexTitle ?? card.address ?? ""} />
 
       <div className="mx-auto max-w-7xl px-5 md:px-8">
         {/* хлебные крошки */}
@@ -129,10 +124,13 @@ export default async function LotPage({ params }: Props) {
             <LotGallery images={gallery} title={card.title} />
 
             <h1 className="mt-8 font-display text-2xl leading-snug text-paper md:text-4xl">
-              {card.title}
+              {lotHeadline(card)}
             </h1>
-            <p className="mt-2 text-sm text-muted">
-              {card.complexTitle} · {card.district} · {card.lotNumberTitle}
+            <p className="mt-2 text-base text-paper/75">{card.title}</p>
+            <p className="mt-1 text-sm text-muted">
+              {[card.complexTitle ?? card.address, card.district, card.lotNumberTitle]
+                .filter(Boolean)
+                .join(" · ")}
             </p>
 
             {transit.length > 0 && (
@@ -188,6 +186,12 @@ export default async function LotPage({ params }: Props) {
                 сделкой — бесплатно.
               </p>
               <LeadForm lotId={card.id} source="lot_page" />
+              <div className="my-4 flex items-center gap-3 text-xs text-muted">
+                <span className="h-px flex-1 bg-ink-line/60" />
+                или напишите нам
+                <span className="h-px flex-1 bg-ink-line/60" />
+              </div>
+              <LotMessengerButtons lotId={card.id} title={card.title} />
             </div>
           </aside>
         </div>

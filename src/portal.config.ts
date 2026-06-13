@@ -26,6 +26,9 @@ export type PortalConfig = {
     phone: string;
     phoneHref: string;
     email: string;
+    /** продажные мессенджеры — плавающие кнопки и CTA */
+    whatsapp: string;
+    telegram: string;
   };
   /** прод-домен портала (для canonical, sitemap, OG) */
   siteUrl: string;
@@ -43,8 +46,6 @@ export type PortalConfig = {
   };
   /** скоуп портала: какие комплексы показываем */
   towers: TowerConfig[];
-  /** дефолтная сортировка каталога */
-  defaultSort: string;
   faq: { q: string; a: string }[];
   about: {
     title: string;
@@ -61,6 +62,10 @@ export const portal: PortalConfig = {
     phone: "+7 (495) 255-01-61",
     phoneHref: "tel:+74952550161",
     email: "info@whitewill.ru",
+    whatsapp:
+      "https://wa.me/74952550161?text=" +
+      encodeURIComponent("Здравствуйте! Интересует недвижимость в Москва-Сити."),
+    telegram: "https://t.me/whitewill_moscow",
   },
   siteUrl: "https://moscow-city-portal.vercel.app",
   seo: {
@@ -95,7 +100,6 @@ export const portal: PortalConfig = {
     { id: 503, slug: "imperia", name: "Империя", tagline: "Апартаменты и офисы, 239 м" },
     { id: 69, slug: "dom-dau", name: "Дом Дау", tagline: "Первый жилой небоскрёб Сити, 340 м" },
   ],
-  defaultSort: "price_rub:asc",
   faq: [
     {
       q: "Чем апартаменты в Москва-Сити отличаются от квартир?",
