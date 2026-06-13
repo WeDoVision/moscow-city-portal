@@ -23,6 +23,12 @@ GET https://whitewill.ru/api/v1/filter/{sale|rent}/lots?page=N&filters=<filters>
 `lotCardInfoListDTO` (Площадь / Спальни / Этаж), стикеры.
 
 Другие сегменты: `/api/v1/filter/{commercials|mansions}/{sale|rent}/lots`.
+Коммерческий сегмент: ключи ответа `moscowCommercialLotFilterResultDTO` /
+`moscowCommercialLotCardDTOs`, карточка без `complexTitle` (есть `address`,
+`floor`), `kind` = retail / gab / office / business-center; фильтра `rooms` нет.
+Жилой `kind` = flat / apartment / villa. Категории старого портала маппятся:
+Квартиры=flat, Апартаменты=apartment, Офисы=commercials+office,
+Ритейл=commercials+retail (отдельного "Пентхаусы" в API нет).
 
 ## Формат filters
 
@@ -36,7 +42,8 @@ filters=complex_id/int_multiple_filter|1:104;rooms/int_multiple_band_strict_filt
 |---|---|---|
 | `complex_id/int_multiple_filter` | id через `:` | `1:104:107` |
 | `rooms/int_multiple_band_strict_filter` | диапазоны `мин:макс` через `,`; студия `0:0`, «4+» `4:` | `2:2,3:3` |
-| `price_rub/int_multiple_band_strict_filter` | `мин:макс` (₽), любой край пустой | `100000000:200000000` |
+| `price_rub/int_multiple_band_strict_filter` | `мин:макс` (₽), любой край пустой; **только sale** | `100000000:200000000` |
+| `price_rub_rent/int_multiple_band_strict_filter` | то же для **rent** (жилого и коммерческого) | `300000:1000000` |
 | `price_rub_m2/int_multiple_band_strict_filter` | то же за м² | |
 | `area_m2/int_band_filter` | `мин:макс` (м²) | `100:150` |
 | `floor/int_band_filter` | `мин:макс` | |
@@ -45,7 +52,7 @@ filters=complex_id/int_multiple_filter|1:104;rooms/int_multiple_band_strict_filt
 | `decoration/str_multiple_filter` | отделка | |
 | `is_secondary/bool_filter`, `is_built/bool_filter` | `0`/`1` | |
 | `readiness_year/int_multiple_filter` | годы | |
-| `sorting/custom` | `колонка:asc\|desc`, колонки `price_rub`, `area` | `price_rub:asc` |
+| `sorting/custom` | `колонка:asc\|desc`; колонки: `price_rub` (sale), `price_rub_rent` (rent), `area` | `price_rub:asc` |
 
 `lot_id/int_multiple_filter|<id>` — способ получить карточку конкретного лота.
 
@@ -101,6 +108,15 @@ JSON-API детальной страницы нет. Страница `https://w
 | Город Столиц | 558 |
 | Империя | 503 |
 | Дом Дау | 69 |
+
+## 3D-карта (не whitewill)
+
+Геометрия района — OpenStreetMap (Overpass): `building` + `building:part`
+с реальными контурами и высотами. Пайплайн: `scripts/build_city_data.py`
+(вход — выгрузка Overpass, выход — `public/data/moscow-city.json`).
+Башни портала привязываются к whitewill `complex_id` по имени OSM
+(`TOWER_PATTERNS`) или координатному якорю (`TOWER_ANCHORS` — Capital Towers
+в OSM безымянный).
 
 ## Прочие эндпоинты (не используются, но есть)
 

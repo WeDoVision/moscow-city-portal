@@ -143,8 +143,20 @@ function normalizeResult(data: Record<string, unknown>): LotFilterResult {
     moscowLotCardDTOs: (cardsKey ? (r[cardsKey] as LotCard[]) : []).map((c) => ({
       ...c,
       images: sortLotImages(c.images ?? []),
+      // у аренды priceFormatted приходит с HTML («₽<span>&nbsp;/месяц</span>»)
+      lotCardPriceListDTO: {
+        lotCardPriceItemDTOs: c.lotCardPriceListDTO.lotCardPriceItemDTOs.map((p) => ({
+          ...p,
+          priceFormatted: stripHtml(p.priceFormatted),
+          pricePerAreaFormatted: stripHtml(p.pricePerAreaFormatted),
+        })),
+      },
     })),
   };
+}
+
+function stripHtml(s: string | null | undefined): string {
+  return (s ?? "").replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
 }
 
 export async function fetchLots(
