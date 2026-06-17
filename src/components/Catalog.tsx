@@ -12,6 +12,7 @@ import {
 import { catalogQueryToParams, parseCatalogQuery } from "@/lib/whitewill/query";
 import { track } from "@/lib/analytics";
 import { LotCard } from "./LotCard";
+import { SmartSearch } from "./SmartSearch";
 
 const ROOM_OPTIONS = [
   { value: "0", label: "Студия" },
@@ -176,8 +177,27 @@ export function Catalog({ initial }: { initial: LotFilterResult }) {
   const cnt = (n: number | undefined) =>
     counts && n != null ? <span className="ml-1.5 text-xs opacity-60">{n}</span> : null;
 
+  const resetAll = () => {
+    setPriceDraft({ min: "", max: "" });
+    setAreaDraft({ min: "", max: "" });
+    setQuery({ deal: "sale", page: 1 });
+  };
+
   return (
     <div>
+      <SmartSearch
+        onApply={(f) => {
+          if (f.priceMin != null || f.priceMax != null) {
+            setPriceDraft({ min: fmtMln(f.priceMin), max: fmtMln(f.priceMax) });
+          }
+          if (f.areaMin != null || f.areaMax != null) {
+            setAreaDraft({ min: f.areaMin?.toString() ?? "", max: f.areaMax?.toString() ?? "" });
+          }
+          apply(f);
+        }}
+        onReset={resetAll}
+      />
+
       {/* ── Панель фильтров ─────────────────────────────────────────── */}
       <div className="rounded-sm border border-ink-line/40 bg-ink-soft/60 p-5 backdrop-blur md:p-6">
         {/* сделка + категории */}
@@ -333,11 +353,7 @@ export function Catalog({ initial }: { initial: LotFilterResult }) {
 
           {hasFilters && (
             <button
-              onClick={() => {
-                setPriceDraft({ min: "", max: "" });
-                setAreaDraft({ min: "", max: "" });
-                setQuery({ deal: "sale", page: 1 });
-              }}
+              onClick={resetAll}
               className="text-sm text-muted underline-offset-4 transition-colors hover:text-gold hover:underline"
             >
               Сбросить

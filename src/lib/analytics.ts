@@ -26,6 +26,7 @@ export type FunnelEvent =
   | "cta_click"
   | "ai_chat_open"
   | "ai_chat_message"
+  | "ai_search"
   | "lead_submit";
 
 type EventProps = Record<string, string | number | boolean | undefined>;

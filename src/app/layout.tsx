@@ -6,7 +6,6 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { PageViewTracker } from "@/components/PageViewTracker";
 import { FloatingMessengers } from "@/components/MessengerButtons";
-import { AssistantChat } from "@/components/AssistantChat";
 import "./globals.css";
 
 const manrope = Manrope({
@@ -53,7 +52,6 @@ export default function RootLayout({
         {children}
         <Footer />
         <FloatingMessengers />
-        <AssistantChat />
         <PageViewTracker />
         {GA_ID && (
           <>
