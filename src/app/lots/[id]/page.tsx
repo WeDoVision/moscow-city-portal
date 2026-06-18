@@ -120,7 +120,7 @@ export default async function LotPage({ params }: Props) {
         </nav>
 
         <div className="grid gap-10 lg:grid-cols-[1fr_380px]">
-          <div>
+          <div className="min-w-0">
             <LotGallery images={gallery} title={card.title} />
 
             <h1 className="mt-8 font-display text-2xl leading-snug text-paper md:text-4xl">
