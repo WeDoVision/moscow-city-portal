@@ -10,11 +10,10 @@ import type { CityScene as CitySceneT } from "./CityScene";
 
 /**
  * Интерактивная 3D-карта Сити: реальная геометрия района (OSM),
- * скролл-пролёт камеры, клик по башне — карточка с инфо и лотами.
+ * драг-вращение камеры, клик по башне — карточка с инфо и лотами.
  * Позиции лейблов обновляются императивно (без re-render на каждый кадр).
  */
 export function CityMap3D({ complexes }: { complexes: ComplexCard[] }) {
-  const wrapRef = useRef<HTMLDivElement>(null);
   const stickyRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<CitySceneT | null>(null);
@@ -22,6 +21,9 @@ export function CityMap3D({ complexes }: { complexes: ComplexCard[] }) {
   const [selected, setSelected] = useState<number | null>(null);
   const [ready, setReady] = useState(false);
   const cxById = new Map(complexes.map((c) => [c.id, c]));
+
+  // drag state
+  const dragRef = useRef<{ x: number; y: number; pointerId: number } | null>(null);
 
   const handlePick = useCallback((tid: number | null) => {
     setSelected(tid);
@@ -55,13 +57,7 @@ export function CityMap3D({ complexes }: { complexes: ComplexCard[] }) {
       const loop = () => {
         raf = requestAnimationFrame(loop);
         const el = stickyRef.current;
-        const wrap = wrapRef.current;
-        if (!el || !wrap || !scene) return;
-        // прогресс пролёта из позиции скролла секции
-        const r = wrap.getBoundingClientRect();
-        const total = r.height - el.clientHeight;
-        const passed = Math.min(Math.max(-r.top, 0), total);
-        scene.progress += ((total ? passed / total : 0) - scene.progress) * 0.08;
+        if (!el || !scene) return;
 
         for (const a of scene.anchors) {
           const btn = labelRefs.current.get(a.id);
@@ -96,6 +92,30 @@ export function CityMap3D({ complexes }: { complexes: ComplexCard[] }) {
       ((e.clientX - r.left) / r.width) * 2 - 1,
       -(((e.clientY - r.top) / r.height) * 2 - 1),
     );
+
+    // drag-вращение
+    if (dragRef.current && dragRef.current.pointerId === e.pointerId) {
+      const dx = e.clientX - dragRef.current.x;
+      const dy = e.clientY - dragRef.current.y;
+      dragRef.current.x = e.clientX;
+      dragRef.current.y = e.clientY;
+      sceneRef.current.rotate(dx * 0.005, -dy * 0.003);
+    }
+  };
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    dragRef.current = { x: e.clientX, y: e.clientY, pointerId: e.pointerId };
+  };
+
+  const onPointerUp = (e: React.PointerEvent) => {
+    if (dragRef.current?.pointerId === e.pointerId) {
+      const dx = Math.abs(e.clientX - dragRef.current.x);
+      const dy = Math.abs(e.clientY - dragRef.current.y);
+      dragRef.current = null;
+      // если движения почти не было — это клик
+      if (dx < 4 && dy < 4) sceneRef.current?.click();
+    }
   };
 
   const showLots = (towerId: number) => {
@@ -111,111 +131,109 @@ export function CityMap3D({ complexes }: { complexes: ComplexCard[] }) {
 
   return (
     <section aria-label="3D-карта Москва-Сити">
-      {/* длинная зона скролла; внутри — прилипший экран с картой */}
-      <div ref={wrapRef} className="relative h-[280svh]">
-        <div ref={stickyRef} className="sticky top-0 h-svh overflow-hidden">
-          <canvas
-            ref={canvasRef}
-            className="absolute inset-0 h-full w-full"
-            onPointerMove={onPointerMove}
-            onClick={() => sceneRef.current?.click()}
-          />
+      <div ref={stickyRef} className="relative h-svh overflow-hidden">
+        <canvas
+          ref={canvasRef}
+          className="absolute inset-0 h-full w-full cursor-grab active:cursor-grabbing"
+          onPointerMove={onPointerMove}
+          onPointerDown={onPointerDown}
+          onPointerUp={onPointerUp}
+        />
 
-          {!ready && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <p className="animate-pulse text-sm tracking-[0.3em] text-muted">
-                ЗАГРУЖАЕМ КАРТУ СИТИ…
-              </p>
-            </div>
-          )}
-
-          {/* заголовок поверх карты */}
-          <div className="pointer-events-none absolute inset-x-0 top-0 pt-24 text-center">
-            <p className="text-xs uppercase tracking-[0.35em] text-gold">Интерактивная карта</p>
-            <h2 className="mt-2 font-display text-3xl text-paper md:text-5xl">
-              Семь башен. Выберите свою
-            </h2>
-            <p className="mt-3 text-sm text-paper/60">
-              Скролл — пролёт над районом · клик по башне — детали
+        {!ready && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <p className="animate-pulse text-sm tracking-[0.3em] text-muted">
+              ЗАГРУЖАЕМ КАРТУ СИТИ…
             </p>
           </div>
+        )}
 
-          {/* лейблы башен (позиции ставит rAF-цикл) */}
-          {ready &&
-            [...towerById.values()].map((t) => (
-              <button
-                key={t.id}
-                ref={(el) => {
-                  if (el) labelRefs.current.set(t.id, el);
-                  else labelRefs.current.delete(t.id);
-                }}
-                onClick={() => handlePick(t.id)}
-                className={`absolute left-0 top-0 whitespace-nowrap rounded-full border px-3 py-1 text-xs backdrop-blur transition-colors ${
-                  selected === t.id
-                    ? "border-gold bg-gold text-ink"
-                    : "border-gold/40 bg-ink/60 text-paper/85 hover:border-gold hover:text-gold"
-                }`}
-                style={{ display: "none" }}
-              >
-                {t.name}
-              </button>
-            ))}
-
-          {/* панель выбранной башни */}
-          {sel && (
-            <aside className="absolute bottom-6 left-1/2 w-[min(92vw,420px)] -translate-x-1/2 rounded-sm border border-ink-line/60 bg-ink/85 p-5 backdrop-blur-md md:left-auto md:right-8 md:translate-x-0">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h3 className="font-display text-2xl text-paper">{sel.name}</h3>
-                  <p className="mt-1 text-sm text-paper/65">{sel.tagline}</p>
-                </div>
-                <button
-                  onClick={() => setSelected(null)}
-                  aria-label="Закрыть"
-                  className="font-display text-xl text-muted hover:text-paper"
-                >
-                  ✕
-                </button>
-              </div>
-              {selCx?.images?.[0] && (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  src={imageUrl(selCx.images[0], 727)}
-                  alt={sel.name}
-                  className="mt-4 h-36 w-full rounded-sm object-cover"
-                />
-              )}
-              {selCx?.complexCardPriceDTO?.priceFormatted && (
-                <p className="mt-3 font-display text-xl text-gold">
-                  {selCx.complexCardPriceDTO.priceFormatted}
-                </p>
-              )}
-              {selCx?.description && (
-                <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-paper/70">
-                  {selCx.description}
-                </p>
-              )}
-              <div className="mt-4 flex gap-3">
-                <button
-                  onClick={() => showLots(sel.id)}
-                  className="flex-1 rounded-full bg-gold py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-gold-deep"
-                >
-                  Лоты башни
-                </button>
-                <Link
-                  href={`/towers/${sel.slug}`}
-                  className="flex-1 rounded-full border border-gold/60 py-2.5 text-center text-sm text-gold transition-colors hover:bg-gold hover:text-ink"
-                >
-                  О башне
-                </Link>
-              </div>
-            </aside>
-          )}
-
-          {/* виньетка сверху и снизу для глубины */}
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-ink to-transparent" />
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-ink to-transparent" />
+        {/* заголовок поверх карты */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 pt-24 text-center">
+          <p className="text-xs uppercase tracking-[0.35em] text-gold">Интерактивная карта</p>
+          <h2 className="mt-2 font-display text-3xl text-paper md:text-5xl">
+            Семь башен. Выберите свою
+          </h2>
+          <p className="mt-3 text-sm text-paper/60">
+            Потяните — вращайте район · клик по башне — детали
+          </p>
         </div>
+
+        {/* лейблы башен (позиции ставит rAF-цикл) */}
+        {ready &&
+          [...towerById.values()].map((t) => (
+            <button
+              key={t.id}
+              ref={(el) => {
+                if (el) labelRefs.current.set(t.id, el);
+                else labelRefs.current.delete(t.id);
+              }}
+              onClick={() => handlePick(t.id)}
+              className={`absolute left-0 top-0 whitespace-nowrap rounded-full border px-3 py-1 text-xs backdrop-blur transition-colors ${
+                selected === t.id
+                  ? "border-gold bg-gold text-ink"
+                  : "border-gold/40 bg-ink/60 text-paper/85 hover:border-gold hover:text-gold"
+              }`}
+              style={{ display: "none" }}
+            >
+              {t.name}
+            </button>
+          ))}
+
+        {/* панель выбранной башни */}
+        {sel && (
+          <aside className="absolute bottom-6 left-1/2 w-[min(92vw,420px)] -translate-x-1/2 rounded-sm border border-ink-line/60 bg-ink/85 p-5 backdrop-blur-md md:left-auto md:right-8 md:translate-x-0">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="font-display text-2xl text-paper">{sel.name}</h3>
+                <p className="mt-1 text-sm text-paper/65">{sel.tagline}</p>
+              </div>
+              <button
+                onClick={() => setSelected(null)}
+                aria-label="Закрыть"
+                className="font-display text-xl text-muted hover:text-paper"
+              >
+                ✕
+              </button>
+            </div>
+            {selCx?.images?.[0] && (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={imageUrl(selCx.images[0], 727)}
+                alt={sel.name}
+                className="mt-4 h-36 w-full rounded-sm object-cover"
+              />
+            )}
+            {selCx?.complexCardPriceDTO?.priceFormatted && (
+              <p className="mt-3 font-display text-xl text-gold">
+                {selCx.complexCardPriceDTO.priceFormatted}
+              </p>
+            )}
+            {selCx?.description && (
+              <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-paper/70">
+                {selCx.description}
+              </p>
+            )}
+            <div className="mt-4 flex gap-3">
+              <button
+                onClick={() => showLots(sel.id)}
+                className="flex-1 rounded-full bg-gold py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-gold-deep"
+              >
+                Лоты башни
+              </button>
+              <Link
+                href={`/towers/${sel.slug}`}
+                className="flex-1 rounded-full border border-gold/60 py-2.5 text-center text-sm text-gold transition-colors hover:bg-gold hover:text-ink"
+              >
+                О башне
+              </Link>
+            </div>
+          </aside>
+        )}
+
+        {/* виньетка сверху и снизу для глубины */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-ink to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-ink to-transparent" />
       </div>
     </section>
   );

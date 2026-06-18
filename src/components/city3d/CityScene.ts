@@ -35,11 +35,13 @@ export class CityScene {
   private pointer = new THREE.Vector2();
   private hovered: number | null = null;
   selected: number | null = null;
-  /** прогресс пролёта 0..1 (скролл) */
-  progress = 0;
+  /** горизонтальный угол камеры (драг по X) */
+  azimuth = -0.65;
+  /** вертикальный угол 0..1 (0 = близко/низко, 1 = далеко/высоко) */
+  elevation = 0.55;
   private frame = 0;
   private disposed = false;
-  private center = new THREE.Vector3(0, 80, 0);
+  private center = new THREE.Vector3(0, 220, 0);
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -54,7 +56,7 @@ export class CityScene {
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-    this.camera = new THREE.PerspectiveCamera(42, 1, 10, 6000);
+    this.camera = new THREE.PerspectiveCamera(58, 1, 10, 6000);
     this.scene.fog = new THREE.Fog(0x0b0d12, 900, 3200);
 
     // свет: лунный холодный + тёплый контровой «закат за башнями»
@@ -142,6 +144,15 @@ export class CityScene {
       const top = towerTops.get(tid)!;
       this.anchors.push({ id: tid, x: top.x, y: top.h + 14, z: top.z });
     }
+
+    // центрируем lookAt по середине bbox всех башен
+    if (this.anchors.length) {
+      const xs = this.anchors.map((a) => a.x);
+      const zs = this.anchors.map((a) => a.z);
+      const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
+      const cz = (Math.min(...zs) + Math.max(...zs)) / 2;
+      this.center.set(cx, 220, cz);
+    }
   }
 
   resize(w: number, h: number) {
@@ -152,6 +163,12 @@ export class CityScene {
 
   setPointer(xNdc: number, yNdc: number) {
     this.pointer.set(xNdc, yNdc);
+  }
+
+  /** обновить угол камеры от драга (dAz в радианах, dEl в долях) */
+  rotate(dAz: number, dEl: number) {
+    this.azimuth += dAz;
+    this.elevation = Math.max(0.1, Math.min(0.9, this.elevation + dEl));
   }
 
   pick(): number | null {
@@ -185,17 +202,14 @@ export class CityScene {
     if (this.disposed) return;
     this.frame = requestAnimationFrame(this.animate);
 
-    // пролёт: азимут + высота/радиус от прогресса скролла, лёгкое дыхание
-    const t = this.progress;
-    const az = -0.65 + t * 2.1;
-    const radius = 1150 - t * 520;
-    const height = 760 - t * 420;
+    const radius = 350 + this.elevation * 900; // 350..1250
+    const height = 120 + this.elevation * 700; // 120..820
     const time = performance.now() / 1000;
     const breathe = Math.sin(time * 0.4) * 8;
     this.camera.position.set(
-      Math.sin(az) * radius,
+      this.center.x + Math.sin(this.azimuth) * radius,
       height + breathe,
-      Math.cos(az) * radius,
+      this.center.z + Math.cos(this.azimuth) * radius,
     );
     this.camera.lookAt(this.center);
 
