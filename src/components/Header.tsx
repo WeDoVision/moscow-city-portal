@@ -6,10 +6,10 @@ import { portal } from "@/portal.config";
 import { track } from "@/lib/analytics";
 
 const NAV = [
-  { href: "/#catalog", label: "Каталог" },
+  { href: "/moscow-city#catalog", label: "Каталог" },
   { href: "/towers", label: "Башни" },
-  { href: "/#about", label: "О портале" },
-  { href: "/#faq", label: "Вопросы" },
+  { href: "/moscow-city#about", label: "О портале" },
+  { href: "/moscow-city#faq", label: "Вопросы" },
 ];
 
 export function Header() {
@@ -32,7 +32,7 @@ export function Header() {
       }`}
     >
       <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 md:px-8">
-        <Link href="/" className="group flex items-baseline gap-2" aria-label={portal.brand.name}>
+        <Link href="/moscow-city" className="group flex items-baseline gap-2" aria-label={portal.brand.name}>
           <span className="font-display text-lg tracking-[0.18em] text-paper">
             {portal.brand.logo[0]}
           </span>

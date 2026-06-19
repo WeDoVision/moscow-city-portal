@@ -1,0 +1,150 @@
+{
+  "slug": "moscow-city",
+  "name": "Moscow City Sale",
+  "brand": {
+    "name": "Moscow City Sale",
+    "logo": [
+      "MOSCOW CITY",
+      "SALE"
+    ],
+    "phone": "+7 (495) 255-01-61",
+    "phoneHref": "tel:+74952550161",
+    "email": "info@whitewill.ru",
+    "whatsapp": "https://wa.me/74952550161",
+    "telegram": "https://t.me/whitewill_moscow"
+  },
+  "theme": {
+    "ink": "oklch(0.98 0.005 245)",
+    "inkSoft": "oklch(0.94 0.008 245)",
+    "inkLine": "oklch(0.86 0.01 245)",
+    "paper": "oklch(0.16 0.03 255)",
+    "paperSoft": "oklch(0.28 0.03 255)",
+    "gold": "oklch(0.72 0.14 255)",
+    "goldDeep": "oklch(0.6 0.16 255)",
+    "muted": "oklch(0.52 0.03 255)",
+    "radius": "0.125rem"
+  },
+  "scope": {
+    "deal": "sale",
+    "towers": [
+      1,
+      104,
+      107,
+      115,
+      558,
+      503,
+      69
+    ]
+  },
+  "blocks": [
+    {
+      "id": "hero",
+      "type": "hero",
+      "enabled": true,
+      "props": {
+        "kicker": "Небоскрёбы Москва-Сити",
+        "title": "Квартиры и апартаменты в башнях Москва-Сити",
+        "subtitle": "Актуальная база лотов от официального партнёра застройщиков. Цены в ₽/$/€, подбор экспертом за 7 минут.",
+        "image": "https://cdn.ww.estate/tp/s/whitewill.ru/uploads/projects/6/background/moskva-siti-fon.png",
+        "overlay": 70
+      }
+    },
+    {
+      "id": "heroOverlayTuning",
+      "type": "custom",
+      "enabled": true,
+      "props": {
+        "title": " ",
+        "padding": "none",
+        "background": "radial-gradient(900px 520px at 14% 22%, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0.14) 38%, rgba(255,255,255,0.00) 70%)",
+        "elements": [
+          {
+            "kind": "html",
+            "html": "<div style=\"height:1px\"></div>"
+          }
+        ]
+      }
+    },
+    {
+      "id": "city3d",
+      "type": "city3d",
+      "enabled": true,
+      "props": {
+        "title": "Москва-Сити в 3D"
+      }
+    },
+    {
+      "id": "towers",
+      "type": "towers",
+      "enabled": true,
+      "props": {
+        "title": "Башни"
+      }
+    },
+    {
+      "id": "lots",
+      "type": "lotsGrid",
+      "enabled": true,
+      "props": {
+        "title": "Актуальные объекты",
+        "subtitle": "Свежие лоты из базы whitewill",
+        "limit": 9
+      }
+    },
+    {
+      "id": "about",
+      "type": "about",
+      "enabled": true,
+      "props": {
+        "title": "О портале",
+        "paragraphs": [
+          "Moscow City Sale — витрина недвижимости в небоскрёбах делового центра.",
+          "Мы официальный партнёр застройщиков, данные обновляются напрямую из базы whitewill."
+        ],
+        "stats": [
+          {
+            "value": "7",
+            "label": "башен в скоупе"
+          },
+          {
+            "value": "500+",
+            "label": "лотов в базе"
+          }
+        ]
+      }
+    },
+    {
+      "id": "faq",
+      "type": "faq",
+      "enabled": true,
+      "props": {
+        "title": "Частые вопросы",
+        "items": [
+          {
+            "q": "Это новостройки или вторичка?",
+            "a": "И то и другое — фильтруется в каталоге."
+          },
+          {
+            "q": "Можно ли купить в рассрочку?",
+            "a": "Да, у большинства застройщиков есть программы. Уточним под ваш объект."
+          }
+        ]
+      }
+    },
+    {
+      "id": "cta",
+      "type": "cta",
+      "enabled": true,
+      "props": {
+        "title": "Подберём объект под ваш запрос",
+        "subtitle": "Оставьте заявку — эксперт пришлёт подборку в течение дня.",
+        "buttonLabel": "Оставить заявку"
+      }
+    }
+  ],
+  "card": {
+    "image": "https://cdn.ww.estate/tp/s/whitewill.ru/uploads/projects/6/background/moskva-siti-fon.png",
+    "logo": "https://cdn.ww.estate/tp/s/whitewill.ru/uploads/projects/6/logo/logo-moskva-siti.svg",
+    "logoSize": "m"
+  }
+}

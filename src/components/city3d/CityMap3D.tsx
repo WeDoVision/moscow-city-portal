@@ -6,14 +6,20 @@ import { towerById } from "@/portal.config";
 import type { ComplexCard } from "@/lib/whitewill/types";
 import { imageUrl } from "@/lib/whitewill/client";
 import { track } from "@/lib/analytics";
-import type { CityScene as CitySceneT } from "./CityScene";
+import type { CityScene as CitySceneT, MapColors } from "./CityScene";
 
 /**
  * Интерактивная 3D-карта Сити: реальная геометрия района (OSM),
  * драг-вращение камеры, клик по башне — карточка с инфо и лотами.
  * Позиции лейблов обновляются императивно (без re-render на каждый кадр).
  */
-export function CityMap3D({ complexes }: { complexes: ComplexCard[] }) {
+export function CityMap3D({
+  complexes,
+  colors,
+}: {
+  complexes: ComplexCard[];
+  colors?: MapColors;
+}) {
   const stickyRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<CitySceneT | null>(null);
@@ -43,7 +49,7 @@ export function CityMap3D({ complexes }: { complexes: ComplexCard[] }) {
       ]);
       if (cancelled || !canvasRef.current) return;
       const data = await res.json();
-      scene = new CityScene(canvasRef.current, data.buildings, handlePick);
+      scene = new CityScene(canvasRef.current, data.buildings, handlePick, colors);
       sceneRef.current = scene;
       setReady(true);
 

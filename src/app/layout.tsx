@@ -1,12 +1,17 @@
 import type { Metadata } from "next";
-import { Manrope, Prata } from "next/font/google";
+import { Manrope, Prata, Playfair_Display, Cormorant } from "next/font/google";
 import Script from "next/script";
 import { portal } from "@/portal.config";
-import { Header } from "@/components/Header";
-import { Footer } from "@/components/Footer";
-import { PageViewTracker } from "@/components/PageViewTracker";
-import { FloatingMessengers } from "@/components/MessengerButtons";
 import "./globals.css";
+
+/**
+ * Корневой layout — тонкая оболочка (html/body/шрифты/аналитика).
+ * Chrome конкретного портала (хедер/футер/кнопки) живёт в своих сегментах:
+ *  - старый Москва-Сити: src/app/(site)/layout.tsx
+ *  - мульти-тенант порталы: PortalRenderer (свой хедер/футер из схемы)
+ *  - админка: src/app/admin
+ * Так разные порталы не делят чужой обвес (KRE-121).
+ */
 
 const manrope = Manrope({
   subsets: ["latin", "cyrillic"],
@@ -19,6 +24,16 @@ const prata = Prata({
   variable: "--font-prata",
 });
 
+const playfair = Playfair_Display({
+  subsets: ["latin", "cyrillic"],
+  variable: "--font-playfair",
+});
+
+const cormorant = Cormorant({
+  subsets: ["latin", "cyrillic"],
+  variable: "--font-cormorant",
+});
+
 export const metadata: Metadata = {
   metadataBase: new URL(portal.siteUrl),
   title: {
@@ -26,17 +41,6 @@ export const metadata: Metadata = {
     template: `%s — ${portal.brand.name}`,
   },
   description: portal.seo.description,
-  keywords: portal.seo.keywords,
-  alternates: { canonical: "/" },
-  openGraph: {
-    type: "website",
-    locale: portal.seo.locale,
-    siteName: portal.brand.name,
-    title: portal.seo.title,
-    description: portal.seo.description,
-    images: [{ url: portal.hero.image }],
-  },
-  twitter: { card: "summary_large_image" },
   robots: { index: true, follow: true },
 };
 
@@ -46,13 +50,12 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="ru" className={`${manrope.variable} ${prata.variable}`}>
+    <html
+      lang="ru"
+      className={`${manrope.variable} ${prata.variable} ${playfair.variable} ${cormorant.variable}`}
+    >
       <body>
-        <Header />
         {children}
-        <Footer />
-        <FloatingMessengers />
-        <PageViewTracker />
         {GA_ID && (
           <>
             <Script

@@ -20,10 +20,39 @@ export type CityBuilding = {
 
 export type TowerAnchor = { id: number; x: number; y: number; z: number };
 
-const INK = new THREE.Color("#14161d");
-const INK_DARK = new THREE.Color("#0e1015");
-const GOLD = new THREE.Color("#c9a96e");
-const GOLD_DIM = new THREE.Color("#6e5c39");
+/** Цвета сцены, приходят из темы портала (любой CSS-формат). */
+export type MapColors = {
+  /** фон/туман/земля — фон портала */
+  background?: string;
+  /** обычная застройка */
+  building?: string;
+  /** база башен */
+  tower?: string;
+  /** акцент: грани башен, тёплый свет */
+  accent?: string;
+  /** тёмный акцент: свечение башен */
+  accentDeep?: string;
+};
+
+/**
+ * Любой CSS-цвет (oklch/hex/rgb) → "#rrggbb". Растеризуем 1 пиксель и читаем
+ * getImageData — это даёт реальный RGB, минуя сериализацию (Three не понимает
+ * oklch, поэтому конвертируем заранее, сохраняя sRGB-трактовку как у hex).
+ */
+function cssToHex(input: string | undefined, fallback: string): string {
+  if (!input) return fallback;
+  try {
+    const ctx = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+    if (!ctx) return fallback;
+    ctx.clearRect(0, 0, 1, 1);
+    ctx.fillStyle = input;
+    ctx.fillRect(0, 0, 1, 1);
+    const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+    return "#" + [r, g, b].map((n) => n.toString(16).padStart(2, "0")).join("");
+  } catch {
+    return fallback;
+  }
+}
 
 export class CityScene {
   renderer: THREE.WebGLRenderer;
@@ -43,11 +72,24 @@ export class CityScene {
   private disposed = false;
   private center = new THREE.Vector3(0, 220, 0);
 
+  // цвета сцены (резолвятся из темы портала)
+  private cityColor: THREE.Color;
+  private towerColor: THREE.Color;
+  private accentColor: THREE.Color;
+  private accentDeepColor: THREE.Color;
+
   constructor(
     canvas: HTMLCanvasElement,
     buildings: CityBuilding[],
     private onPick: (towerId: number | null) => void,
+    colors: MapColors = {},
   ) {
+    const bg = new THREE.Color(cssToHex(colors.background, "#0e1015"));
+    this.cityColor = new THREE.Color(cssToHex(colors.building, "#14161d"));
+    this.towerColor = new THREE.Color(cssToHex(colors.tower, "#232838"));
+    this.accentColor = new THREE.Color(cssToHex(colors.accent, "#c9a96e"));
+    this.accentDeepColor = new THREE.Color(cssToHex(colors.accentDeep, "#6e5c39"));
+
     this.renderer = new THREE.WebGLRenderer({
       canvas,
       antialias: true,
@@ -57,21 +99,23 @@ export class CityScene {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
     this.camera = new THREE.PerspectiveCamera(58, 1, 10, 6000);
-    this.scene.fog = new THREE.Fog(0x0b0d12, 900, 3200);
+    // туман уводит дальние здания в цвет фона портала
+    this.scene.fog = new THREE.Fog(bg.clone(), 900, 3200);
 
-    // свет: лунный холодный + тёплый контровой «закат за башнями»
-    this.scene.add(new THREE.AmbientLight(0x404a5c, 1.1));
-    const moon = new THREE.DirectionalLight(0xbfd0e8, 1.4);
+    // нейтральный заполняющий свет, чтобы цвета поверхностей читались как в теме;
+    // лунный холодный + тёплый акцентный «контровой» для объёма
+    this.scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+    const moon = new THREE.DirectionalLight(0xbfd0e8, 1.1);
     moon.position.set(-600, 900, -400);
     this.scene.add(moon);
-    const warm = new THREE.DirectionalLight(0xc9a96e, 0.8);
+    const warm = new THREE.DirectionalLight(this.accentColor.clone(), 0.7);
     warm.position.set(500, 300, 700);
     this.scene.add(warm);
 
-    // земля
+    // земля — цвет фона портала
     const ground = new THREE.Mesh(
       new THREE.CircleGeometry(2600, 64),
-      new THREE.MeshLambertMaterial({ color: INK_DARK }),
+      new THREE.MeshLambertMaterial({ color: bg }),
     );
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -0.5;
@@ -115,7 +159,7 @@ export class CityScene {
     }
 
     const cityMat = new THREE.MeshLambertMaterial({
-      color: INK,
+      color: this.cityColor,
       transparent: true,
       opacity: 0.92,
     });
@@ -124,10 +168,10 @@ export class CityScene {
 
     for (const [tid, geos] of towerGeos) {
       const mat = new THREE.MeshStandardMaterial({
-        color: new THREE.Color("#232838"),
+        color: this.towerColor.clone(),
         metalness: 0.85,
         roughness: 0.35,
-        emissive: GOLD_DIM,
+        emissive: this.accentDeepColor.clone(),
         emissiveIntensity: 0.12,
       });
       const mesh = new THREE.Mesh(mergeGeometries(geos, false), mat);
@@ -137,7 +181,7 @@ export class CityScene {
 
       const edges = new THREE.LineSegments(
         new THREE.EdgesGeometry(mesh.geometry, 30),
-        new THREE.LineBasicMaterial({ color: GOLD, transparent: true, opacity: 0.35 }),
+        new THREE.LineBasicMaterial({ color: this.accentColor.clone(), transparent: true, opacity: 0.35 }),
       );
       mesh.add(edges);
 
