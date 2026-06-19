@@ -13,7 +13,8 @@ import type { CatalogQuery, Category } from "@/lib/whitewill/types";
 export const maxDuration = 60;
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
-const MODEL = process.env.OPENAI_MODEL ?? "gpt-5.4-mini";
+// Чат-ассистент — быстрая мини-модель (можно переопределить OPENAI_MODEL_CHAT)
+const MODEL = process.env.OPENAI_MODEL_CHAT ?? process.env.OPENAI_MODEL ?? "gpt-5.4-mini";
 
 const TOWER_LIST = portal.towers
   .map((t) => `- ${t.name} (id=${t.id}): ${t.tagline}`)
