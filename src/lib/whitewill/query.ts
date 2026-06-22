@@ -31,6 +31,9 @@ export function parseCatalogQuery(
     priceMax: num(get("priceMax")),
     areaMin: num(get("areaMin")),
     areaMax: num(get("areaMax")),
+    decoration: get("decoration")?.split(",").filter(Boolean),
+    floorMin: num(get("floorMin")),
+    floorMax: num(get("floorMax")),
     sort: get("sort") ?? undefined,
     page: num(get("page")) ?? 1,
   };
@@ -46,6 +49,9 @@ export function catalogQueryToParams(q: CatalogQuery): URLSearchParams {
   if (q.priceMax != null) p.set("priceMax", String(q.priceMax));
   if (q.areaMin != null) p.set("areaMin", String(q.areaMin));
   if (q.areaMax != null) p.set("areaMax", String(q.areaMax));
+  if (q.decoration?.length) p.set("decoration", q.decoration.join(","));
+  if (q.floorMin != null) p.set("floorMin", String(q.floorMin));
+  if (q.floorMax != null) p.set("floorMax", String(q.floorMax));
   if (q.sort) p.set("sort", q.sort);
   if (q.page && q.page > 1) p.set("page", String(q.page));
   return p;

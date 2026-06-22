@@ -105,9 +105,21 @@ export type CatalogQuery = {
   priceMax?: number;
   areaMin?: number;
   areaMax?: number;
+  /** отделка: коды из DECORATION_OPTIONS */
+  decoration?: string[];
+  /** этаж — диапазон */
+  floorMin?: number;
+  floorMax?: number;
   sort?: string; // "price_asc" | "price_desc" | "area_asc" | "area_desc"
   page?: number;
 };
+
+/** Варианты отделки (decoration/str_multiple_filter в API whitewill) */
+export const DECORATION_OPTIONS: { value: string; label: string }[] = [
+  { value: "with_decoration", label: "С отделкой" },
+  { value: "without_decoration", label: "Без отделки" },
+  { value: "whitebox", label: "White box" },
+];
 
 /** Счётчики для панели фильтров (как на старом портале) */
 export type CatalogCounts = {

@@ -119,6 +119,14 @@ export function buildFilters(q: CatalogQuery): string {
   if (q.areaMin != null || q.areaMax != null) {
     rules.push(`area_m2/int_band_filter|${q.areaMin ?? ""}:${q.areaMax ?? ""}`);
   }
+  // отделка — только жилой сегмент (у офисов/ритейла её нет)
+  if (segmentOf(q.category) === "residential" && q.decoration?.length) {
+    rules.push(`decoration/str_multiple_filter|${q.decoration.join(",")}`);
+  }
+  // этаж
+  if (q.floorMin != null || q.floorMax != null) {
+    rules.push(`floor/int_band_filter|${q.floorMin ?? ""}:${q.floorMax ?? ""}`);
+  }
   rules.push(`sorting/custom|${sortValue(q.sort, deal)}`);
   return rules.join(";");
 }

@@ -29,11 +29,15 @@ ${TOWER_LIST}
 Правила:
 1. Когда пользователь описывает, что ищет, ВСЕГДА вызывай инструмент search_lots, мапя запрос на фильтры. «Однушка» = 1 спальня, «двушка» = 2 спальни, «студия» = 0. Цены пользователь называет в млн ₽ — переводи в рубли.
 2. Жильё — категории flat (квартиры) или apartment (апартаменты); офисы — office, торговые — retail. Если не уточнили — не передавай category.
-3. Фильтров «вид из окон», «этажность», «сторона света» в поиске нет: учитывай такие пожелания текстом (например, предложи верхние этажи и уточнение у эксперта), но не выдумывай фильтры.
-4. После поиска коротко прокомментируй результат: сколько нашлось, что показал, какие варианты интереснее под запрос и почему. Не перечисляй лоты списком — карточки покажет интерфейс. 2-4 предложения.
-5. Если ничего не нашлось — предложи ослабить бюджет/параметры и сразу сделай повторный поиск с ослабленными фильтрами.
-6. Отвечай по-русски, дружелюбно и по делу. Не выдумывай цены и факты — только данные из поиска.
-7. На вопросы про башни отвечай из их описаний выше; для показов и сделок предлагай оставить заявку или написать в WhatsApp/Telegram.`;
+3. Понимай НЕЧЁТКИЕ пожелания и мапь их на фильтры floor (этаж) и decoration (отделка):
+   • «нижние/низкие этажи» → floorMax ~5-7; «высокие/верхние/видовые/панорамные/над городом» → floorMin ~25-30; «средние этажи» → floorMin ~8, floorMax ~20.
+   • «красивый вид / видовая квартира» → ставь высокий этаж (floorMin ~25) как лучшее приближение и в комментарии скажи, что точный вид подберём с экспертом.
+   • «с отделкой / под заезд / готовая / можно жить сразу» → decoration:["with_decoration"]; «без отделки / под свой ремонт / голые стены» → ["without_decoration"]; «предчистовая / white box» → ["whitebox"].
+4. Чего в фильтрах НЕТ (сторона света, конкретный вид из окна, меблировка, ремонт по дизайн-проекту) — не выдумывай фильтры: учти пожелание текстом, подбери ближайшее (этаж/отделка) и предложи уточнить у эксперта.
+5. После поиска коротко прокомментируй результат: сколько нашлось, что показал, какие варианты интереснее под запрос и почему. Не перечисляй лоты списком — карточки покажет интерфейс. 2-4 предложения.
+6. Если ничего не нашлось — предложи ослабить бюджет/параметры и сразу сделай повторный поиск с ослабленными фильтрами.
+7. Отвечай по-русски, дружелюбно и по делу. Не выдумывай цены и факты — только данные из поиска.
+8. На вопросы про башни отвечай из их описаний выше; для показов и сделок предлагай оставить заявку или написать в WhatsApp/Telegram.`;
 
 const SEARCH_TOOL = {
   type: "function",
@@ -64,6 +68,14 @@ const SEARCH_TOOL = {
         priceMax: { type: "integer", description: "Макс. цена в РУБЛЯХ (не млн!)" },
         areaMin: { type: "integer", description: "Мин. площадь м²" },
         areaMax: { type: "integer", description: "Макс. площадь м²" },
+        decoration: {
+          type: "array",
+          items: { type: "string", enum: ["with_decoration", "without_decoration", "whitebox"] },
+          description:
+            "Отделка: with_decoration=с отделкой (под заезд/ремонт готов), without_decoration=без отделки (под свой ремонт), whitebox=White box (предчистовая)",
+        },
+        floorMin: { type: "integer", description: "Мин. этаж" },
+        floorMax: { type: "integer", description: "Макс. этаж" },
         sort: {
           type: "string",
           enum: ["price_asc", "price_desc", "area_asc", "area_desc"],
@@ -137,8 +149,9 @@ export async function POST(req: NextRequest) {
   let lastEmptyFilters: Partial<CatalogQuery> | null = null;
 
   try {
-    // до 3 раундов tool calling
-    for (let round = 0; round < 3; round++) {
+    // до 5 раундов tool calling (модель может несколько раз уточнить фильтры,
+    // плюс нужен раунд на финальный комментарий)
+    for (let round = 0; round < 5; round++) {
       const res = await fetch(OPENAI_URL, {
         method: "POST",
         headers: {
@@ -191,6 +204,13 @@ export async function POST(req: NextRequest) {
             priceMax: typeof args.priceMax === "number" ? args.priceMax : undefined,
             areaMin: typeof args.areaMin === "number" ? args.areaMin : undefined,
             areaMax: typeof args.areaMax === "number" ? args.areaMax : undefined,
+            decoration: Array.isArray(args.decoration)
+              ? (args.decoration as string[]).filter((d) =>
+                  ["with_decoration", "without_decoration", "whitebox"].includes(d),
+                )
+              : undefined,
+            floorMin: typeof args.floorMin === "number" ? args.floorMin : undefined,
+            floorMax: typeof args.floorMax === "number" ? args.floorMax : undefined,
             sort: typeof args.sort === "string" ? args.sort : undefined,
             page: 1,
           };

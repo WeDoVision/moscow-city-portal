@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { portal } from "@/portal.config";
 import {
   CATEGORIES,
+  DECORATION_OPTIONS,
   type CatalogCounts,
   type CatalogQuery,
   type LotFilterResult,
@@ -65,6 +66,10 @@ export function Catalog({
   const [areaDraft, setAreaDraft] = useState({
     min: query.areaMin?.toString() ?? "",
     max: query.areaMax?.toString() ?? "",
+  });
+  const [floorDraft, setFloorDraft] = useState({
+    min: query.floorMin?.toString() ?? "",
+    max: query.floorMax?.toString() ?? "",
   });
   const firstRender = useRef(true);
   const abortRef = useRef<AbortController | null>(null);
@@ -170,6 +175,21 @@ export function Catalog({
     apply({ areaMin: int(areaDraft.min), areaMax: int(areaDraft.max) });
   };
 
+  const commitFloor = () => {
+    const int = (s: string) => {
+      const n = parseInt(s, 10);
+      return Number.isNaN(n) ? undefined : n;
+    };
+    apply({ floorMin: int(floorDraft.min), floorMax: int(floorDraft.max) });
+  };
+
+  const toggleDecoration = (v: string) => {
+    const cur = new Set(query.decoration ?? []);
+    if (cur.has(v)) cur.delete(v);
+    else cur.add(v);
+    apply({ decoration: [...cur] });
+  };
+
   const isResidential = !query.category || query.category === "flat" || query.category === "apartment";
 
   const hasFilters = useMemo(
@@ -182,6 +202,9 @@ export function Catalog({
           query.priceMax != null ||
           query.areaMin != null ||
           query.areaMax != null ||
+          query.decoration?.length ||
+          query.floorMin != null ||
+          query.floorMax != null ||
           query.deal === "rent" ||
           query.sort,
       ),
@@ -194,6 +217,7 @@ export function Catalog({
   const resetAll = () => {
     setPriceDraft({ min: "", max: "" });
     setAreaDraft({ min: "", max: "" });
+    setFloorDraft({ min: "", max: "" });
     setQuery({ deal: "sale", page: 1 });
   };
 
@@ -332,6 +356,31 @@ export function Catalog({
             />
           </div>
 
+          <div className="flex items-center gap-2 rounded-full border border-ink-line/60 px-4 py-1.5">
+            <span className="text-xs text-muted">Этаж</span>
+            <input
+              inputMode="numeric"
+              placeholder="от"
+              value={floorDraft.min}
+              onChange={(e) => setFloorDraft((p) => ({ ...p, min: e.target.value }))}
+              onBlur={commitFloor}
+              onKeyDown={(e) => e.key === "Enter" && commitFloor()}
+              className="w-12 bg-transparent text-sm text-paper placeholder:text-muted/60 focus:outline-none"
+              aria-label="Этаж от"
+            />
+            <span className="text-muted">—</span>
+            <input
+              inputMode="numeric"
+              placeholder="до"
+              value={floorDraft.max}
+              onChange={(e) => setFloorDraft((p) => ({ ...p, max: e.target.value }))}
+              onBlur={commitFloor}
+              onKeyDown={(e) => e.key === "Enter" && commitFloor()}
+              className="w-12 bg-transparent text-sm text-paper placeholder:text-muted/60 focus:outline-none"
+              aria-label="Этаж до"
+            />
+          </div>
+
           {isResidential && (
             <div className="flex items-center gap-1 rounded-full border border-ink-line/60 p-1" role="group" aria-label="Спальни">
               <span className="pl-3 pr-1 text-xs text-muted">Спальни</span>
@@ -347,6 +396,25 @@ export function Catalog({
                   }`}
                 >
                   {r.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {isResidential && (
+            <div className="no-scrollbar flex gap-2 overflow-x-auto" role="group" aria-label="Отделка">
+              {DECORATION_OPTIONS.map((d) => (
+                <button
+                  key={d.value}
+                  onClick={() => toggleDecoration(d.value)}
+                  aria-pressed={query.decoration?.includes(d.value) ?? false}
+                  className={`shrink-0 rounded-full border px-4 py-1.5 text-sm transition-colors ${
+                    query.decoration?.includes(d.value)
+                      ? "border-gold bg-gold/15 text-gold"
+                      : "border-ink-line/60 text-paper/70 hover:border-paper/40 hover:text-paper"
+                  }`}
+                >
+                  {d.label}
                 </button>
               ))}
             </div>
