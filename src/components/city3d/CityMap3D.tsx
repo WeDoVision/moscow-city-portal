@@ -6,7 +6,7 @@ import { towerById } from "@/portal.config";
 import type { ComplexCard } from "@/lib/whitewill/types";
 import { imageUrl } from "@/lib/whitewill/client";
 import { track } from "@/lib/analytics";
-import type { CityScene as CitySceneT, MapColors } from "./CityScene";
+import type { CityScene as CitySceneT, MapColors, MapView } from "./CityScene";
 
 /**
  * Интерактивная 3D-карта Сити: реальная геометрия района (OSM),
@@ -16,9 +16,11 @@ import type { CityScene as CitySceneT, MapColors } from "./CityScene";
 export function CityMap3D({
   complexes,
   colors,
+  view,
 }: {
   complexes: ComplexCard[];
   colors?: MapColors;
+  view?: MapView;
 }) {
   const stickyRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -49,7 +51,7 @@ export function CityMap3D({
       ]);
       if (cancelled || !canvasRef.current) return;
       const data = await res.json();
-      scene = new CityScene(canvasRef.current, data.buildings, handlePick, colors);
+      scene = new CityScene(canvasRef.current, data.buildings, handlePick, colors, view);
       sceneRef.current = scene;
       setReady(true);
 
@@ -144,6 +146,7 @@ export function CityMap3D({
           onPointerMove={onPointerMove}
           onPointerDown={onPointerDown}
           onPointerUp={onPointerUp}
+          onPointerLeave={() => sceneRef.current?.clearHover()}
         />
 
         {!ready && (
