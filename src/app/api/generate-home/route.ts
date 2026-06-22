@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { getHomeOverrides, saveHomeOverrides } from "@/lib/portal/home-store";
 import { sanitizeOverrides, SECTION_KEYS, SECTION_ANCHORS } from "@/lib/portal/home-overrides";
+import { aiException, fail, openaiHttpError, parseJsonLoose } from "@/lib/portal/ai-errors";
 
 /**
  * ИИ-правка главной (зеркала whitewill.ru). Бриф на естественном языке →
@@ -69,7 +70,11 @@ const SYSTEM_PROMPT = `Ты редактируешь главную страни
 export async function POST(req: NextRequest) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    return NextResponse.json({ error: "generator_not_configured" }, { status: 503 });
+    return fail(
+      "generator_not_configured",
+      "ИИ-генератор не настроен: не задан ключ OPENAI_API_KEY. Добавьте его в .env.local и перезапустите сервер.",
+      503,
+    );
   }
 
   let brief = "";
@@ -77,15 +82,17 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     brief = body.brief ?? "";
   } catch {
-    return NextResponse.json({ error: "bad_json" }, { status: 400 });
+    return fail("bad_request", "Не удалось прочитать запрос. Обновите страницу и попробуйте снова.", 400);
   }
   if (!brief.trim()) {
-    return NextResponse.json({ error: "empty_brief" }, { status: 422 });
+    return fail("empty_brief", "Опишите, что нужно сделать — текст запроса пустой.", 422);
   }
 
   const [current, digest] = await Promise.all([getHomeOverrides(), textDigest()]);
   const userContent = `Уже применённые правки (JSON):\n${JSON.stringify(current)}\n\nЗаметные тексты на странице (для точных op:"text".from):\n${digest.map((t) => `• ${t}`).join("\n")}\n\nЗапрос пользователя: ${brief}\n\nВерни полный итоговый список edits.`;
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 55_000);
   try {
     const res = await fetch(OPENAI_URL, {
       method: "POST",
@@ -97,23 +104,33 @@ export async function POST(req: NextRequest) {
           { role: "user", content: userContent },
         ],
         response_format: { type: "json_object" },
-        max_completion_tokens: 2000,
+        // полный список edits может быть длинным — даём щедрый запас, иначе
+        // JSON обрывается по лимиту (llm_bad_json)
+        max_completion_tokens: 16000,
       }),
+      signal: controller.signal,
     });
     if (!res.ok) {
       const errText = await res.text();
       console.error("[generate-home] openai error", res.status, errText.slice(0, 500));
-      return NextResponse.json({ error: "llm_error" }, { status: 502 });
+      return openaiHttpError(res.status, errText, MODEL);
     }
     const data = await res.json();
     const raw = data.choices?.[0]?.message?.content;
-    if (!raw) return NextResponse.json({ error: "llm_empty" }, { status: 502 });
+    if (!raw) {
+      return fail("llm_empty", "ИИ не дал ответа. Попробуйте ещё раз или упростите запрос.", 502);
+    }
 
     let parsed: unknown;
     try {
-      parsed = JSON.parse(raw);
+      parsed = parseJsonLoose(raw);
     } catch {
-      return NextResponse.json({ error: "llm_bad_json" }, { status: 502 });
+      return fail(
+        "llm_bad_json",
+        "ИИ вернул ответ в неожиданном формате. Попробуйте переформулировать запрос короче и конкретнее.",
+        502,
+        `Ответ модели не распарсился как JSON. Начало ответа: ${String(raw).slice(0, 200)}`,
+      );
     }
 
     const overrides = sanitizeOverrides(parsed);
@@ -121,7 +138,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, overrides });
   } catch (e) {
     console.error("[generate-home]", e);
-    return NextResponse.json({ error: "generator_error" }, { status: 500 });
+    return aiException(e);
+  } finally {
+    clearTimeout(timer);
   }
 }
 

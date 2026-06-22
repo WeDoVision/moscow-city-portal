@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { portal } from "@/portal.config";
 import { fetchLots, imageUrl, lotHeadline, lotPrice } from "@/lib/whitewill/client";
 import type { CatalogQuery, Category } from "@/lib/whitewill/types";
+import { aiException, fail, openaiHttpError } from "@/lib/portal/ai-errors";
 
 /**
  * AI-агент подбора: LLM с tool calling поверх того же каталога.
@@ -105,18 +106,22 @@ function compactLot(card: Parameters<typeof lotHeadline>[0]): CompactLot {
 export async function POST(req: NextRequest) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    return NextResponse.json({ error: "assistant_not_configured" }, { status: 503 });
+    return fail(
+      "assistant_not_configured",
+      "Чат-ассистент не настроен: не задан ключ OPENAI_API_KEY. Добавьте его в .env.local и перезапустите сервер.",
+      503,
+    );
   }
 
   let body: { messages?: { role: "user" | "assistant"; content: string }[] };
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "bad_json" }, { status: 400 });
+    return fail("bad_request", "Не удалось прочитать сообщение. Обновите страницу и попробуйте снова.", 400);
   }
   const history = (body.messages ?? []).slice(-12);
   if (!history.length || history[history.length - 1].role !== "user") {
-    return NextResponse.json({ error: "no_user_message" }, { status: 422 });
+    return fail("no_user_message", "Нет сообщения от пользователя — напишите запрос.", 422);
   }
 
   const messages: ChatMessage[] = [
@@ -145,17 +150,20 @@ export async function POST(req: NextRequest) {
           messages,
           tools: [SEARCH_TOOL],
           tool_choice: "auto",
-          max_completion_tokens: 700,
+          // запас на рассуждения модели + ответ/tool-calls (700 мог обрезаться)
+          max_completion_tokens: 4000,
         }),
       });
       if (!res.ok) {
         const errText = await res.text();
         console.error("[assistant] openai error", res.status, errText.slice(0, 500));
-        return NextResponse.json({ error: "llm_error" }, { status: 502 });
+        return openaiHttpError(res.status, errText, MODEL);
       }
       const data = await res.json();
       const msg = data.choices?.[0]?.message;
-      if (!msg) return NextResponse.json({ error: "llm_empty" }, { status: 502 });
+      if (!msg) {
+        return fail("llm_empty", "ИИ не дал ответа. Попробуйте ещё раз или упростите запрос.", 502);
+      }
 
       if (msg.tool_calls?.length) {
         messages.push(msg);
@@ -238,6 +246,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (e) {
     console.error("[assistant]", e);
-    return NextResponse.json({ error: "assistant_error" }, { status: 500 });
+    return aiException(e);
   }
 }

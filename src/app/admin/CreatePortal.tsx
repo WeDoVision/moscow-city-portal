@@ -25,15 +25,15 @@ export function CreatePortal() {
       const data = await res.json();
       if (!res.ok) {
         setError(
-          data.error === "generator_not_configured"
-            ? "Не задан OPENAI_API_KEY — генерация недоступна."
-            : `Ошибка генерации: ${data.error ?? res.status}`,
+          typeof data.message === "string" && data.message
+            ? data.message
+            : "Не удалось сгенерировать портал. Попробуйте ещё раз.",
         );
         return;
       }
       router.push(`/admin/${data.slug}`);
     } catch {
-      setError("Сеть недоступна.");
+      setError("Сеть недоступна. Проверьте соединение и попробуйте снова.");
     } finally {
       setLoading(false);
     }

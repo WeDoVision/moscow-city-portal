@@ -26,16 +26,16 @@ export function HomeEditor({ initial }: { initial: HomeOverrides }) {
       const data = await res.json();
       if (!res.ok) {
         setError(
-          data.error === "generator_not_configured"
-            ? "Не задан OPENAI_API_KEY — генерация недоступна."
-            : `Ошибка: ${data.error ?? res.status}`,
+          typeof data.message === "string" && data.message
+            ? data.message
+            : "Не удалось применить правку. Попробуйте ещё раз.",
         );
         return;
       }
       setOverrides(data.overrides as HomeOverrides);
       setBrief("");
     } catch {
-      setError("Сеть недоступна.");
+      setError("Сеть недоступна. Проверьте соединение и попробуйте снова.");
     } finally {
       setBusy(false);
     }
