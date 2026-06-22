@@ -12,16 +12,18 @@ const FALLBACK =
     `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480"><rect width="100%" height="100%" fill="#1a1c24"/><text x="50%" y="50%" fill="#5a5d6b" font-family="sans-serif" font-size="16" text-anchor="middle">Фото скоро появится</text></svg>`,
   );
 
-export function LotCard({ lot }: { lot: LotCardType }) {
+export function LotCard({ lot, portalSlug }: { lot: LotCardType; portalSlug?: string }) {
   const [imgIdx, setImgIdx] = useState(0);
   const price = lot.lotCardPriceListDTO.lotCardPriceItemDTOs.find((p) => p.currency === "RUB");
   const transit = lot.lotCardTransitListDTO.lotCardTransitItemDTOs[0];
   const images = lot.images.length ? lot.images : [""];
   const badge = lot.complexTitle ?? lot.address ?? lot.district;
+  // в портале ведём на портальный маршрут — страница лота берёт тему из самого маршрута
+  const href = portalSlug ? `/p/${portalSlug}/lots/${lot.id}` : `/lots/${lot.id}`;
 
   return (
     <Link
-      href={`/lots/${lot.id}`}
+      href={href}
       onClick={() => track("lot_card_click", { lotId: lot.id, complex: badge })}
       className="group block overflow-hidden rounded-sm border border-ink-line/40 bg-ink-soft transition-all duration-300 hover:-translate-y-1 hover:border-gold/50"
     >
