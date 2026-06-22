@@ -62,10 +62,14 @@
     },
     {
       "id": "towers",
-      "type": "towers",
+      "type": "data",
       "enabled": true,
       "props": {
-        "title": "Башни"
+        "title": "Башни Москва-Сити",
+        "subtitle": "Листайте кольцо — в центре в фокусе",
+        "source": "complexes",
+        "view": "ring",
+        "limit": 7
       }
     },
     {

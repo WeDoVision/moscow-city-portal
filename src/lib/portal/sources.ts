@@ -11,7 +11,7 @@
  */
 
 export type SourceId = "lots" | "complexes";
-export type ViewId = "cards" | "list" | "table" | "carousel" | "single";
+export type ViewId = "cards" | "list" | "table" | "carousel" | "single" | "ring";
 
 export type FieldDef = { key: string; label: string };
 
@@ -51,6 +51,7 @@ export const VIEWS: { id: ViewId; label: string; hint: string }[] = [
   { id: "list", label: "Список", hint: "строки: фото слева, текст справа" },
   { id: "table", label: "Таблица", hint: "колонки из выбранных полей" },
   { id: "carousel", label: "Карусель", hint: "горизонтальная прокрутка карточек" },
+  { id: "ring", label: "3D-карусель", hint: "кольцо карточек с фокусом по центру, крутится перетаскиванием" },
   { id: "single", label: "Один объект", hint: "крупный акцентный блок (первый объект)" },
 ];
 

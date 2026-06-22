@@ -30,10 +30,11 @@ ${BLOCK_TYPES.join(", ")}
 - towers: { title } — полоса башен/ЖК (устар., предпочитай data c source:"complexes")
 - lotsGrid: { title, subtitle, limit } — сетка объектов (устар., предпочитай data c source:"lots")
 - catalog: { title?, subtitle? } — интерактивный каталог объектов с УМНЫМ ПОИСКОМ и фильтрами (сделка, категория, башня, цена, площадь, спальни, сортировка) + пагинация. Бери его, когда нужен полноценный поиск/подбор лотов на портале (а не просто витрина). Башни фильтра берутся из scope портала.
-- data: УНИВЕРСАЛЬНЫЙ блок «источник данных × вид». Бери его, когда нужно показать объекты/комплексы в любом виде. Пропсы: { title?, subtitle?, source:"lots"|"complexes", view:"cards"|"list"|"table"|"carousel"|"single", sort?:"default|price_asc|price_desc|area_asc|area_desc", limit? (0=все; для single берётся первый), fields?:{image,title,subtitle,price,badge}, columns?:[ключи полей — для view:"table"] }.
+- data: УНИВЕРСАЛЬНЫЙ блок «источник данных × вид». Бери его, когда нужно показать объекты/комплексы в любом виде. Пропсы: { title?, subtitle?, source:"lots"|"complexes", view:"cards"|"list"|"table"|"carousel"|"ring"|"single", sort?:"default|price_asc|price_desc|area_asc|area_desc", limit? (0=все; для single берётся первый), fields?:{image,title,subtitle,price,badge}, columns?:[ключи полей — для view:"table"] }.
   • source "lots" поля: image,title,subtitle,price,pricePerArea,area,district,badge,metro,floor
   • source "complexes" поля: image,title,subtitle,price,district,kind,badge
   • fields маппит «слот карточки» → «ключ поля источника» (можно опустить — есть разумные дефолты). Пример: каталог квартир таблицей = { source:"lots", view:"table", columns:["title","area","price","metro"] }; лента ЖК каруселью = { source:"complexes", view:"carousel" }.
+  • view:"ring" — ВАУ-эффект: 3D-карусель (кольцо карточек, крутится перетаскиванием, центральная в фокусе). Хорош для витрины избранных ЖК/лотов на премиальном портале; ставь limit ~6-10.
 - about: { title, paragraphs:[string], stats:[{value,label}] }
 - faq: { title, items:[{q,a}] }
 - cta: { title, subtitle, buttonLabel, buttonHref } — buttonHref: ссылка кнопки (URL; по умолч. whatsapp бренда)

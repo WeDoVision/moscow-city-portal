@@ -13,6 +13,7 @@ import type { ComplexCard, LotCard } from "@/lib/whitewill/types";
 import { imageUrl, lotHeadline } from "@/lib/whitewill/client";
 import { SOURCES, type SlotId, type SourceId, type ViewId } from "@/lib/portal/sources";
 import type { PortalData } from "@/components/portal/blocks";
+import { RingCarousel } from "@/components/portal/RingCarousel";
 
 /** Нормализованный объект: значения по ключам полей + картинка/ссылка/сорт-ключи. */
 export type Item = {
@@ -292,6 +293,19 @@ export function DataView({
       return <TableView items={items} columns={columns} source={source} />;
     case "carousel":
       return <CarouselView items={items} fields={fields} />;
+    case "ring":
+      return (
+        <RingCarousel
+          cards={items.map((it) => ({
+            href: it.href,
+            image: slot(it, fields, "image") || it.image,
+            title: slot(it, fields, "title"),
+            subtitle: slot(it, fields, "subtitle"),
+            price: slot(it, fields, "price"),
+            badge: slot(it, fields, "badge"),
+          }))}
+        />
+      );
     case "single":
       return <SingleView item={items[0]} fields={fields} />;
     case "cards":
