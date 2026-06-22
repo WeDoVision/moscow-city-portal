@@ -219,6 +219,34 @@ function sanitizeHtml(html: string): string {
 const alignCls = (a: string) =>
   a === "center" ? "text-center" : a === "right" ? "text-right" : "text-left";
 
+/** Цвет текста — токен темы (а не произвольный CSS). `fallback` — цвет по умолчанию для элемента. */
+const colorCls = (c: string, fallback: string) =>
+  c === "accent"
+    ? "text-gold"
+    : c === "muted"
+      ? "text-muted"
+      : c === "paper"
+        ? "text-paper"
+        : fallback;
+
+/** Начертание текста — токены (жирность/курсив/капс), а не произвольный CSS. */
+function emphasisCls(el: Record<string, unknown>): string {
+  const w = str(el.weight);
+  const weight =
+    w === "bold"
+      ? "font-bold"
+      : w === "semibold"
+        ? "font-semibold"
+        : w === "medium"
+          ? "font-medium"
+          : w === "light"
+            ? "font-light"
+            : "";
+  return [weight, el.italic ? "italic" : "", el.uppercase ? "uppercase tracking-wide" : ""]
+    .filter(Boolean)
+    .join(" ");
+}
+
 /** Рендер одного примитива произвольной секции. */
 function renderEl(el: Record<string, unknown>, key: string | number, schema: PortalSchema): ReactNode {
   const kind = str(el.kind);
@@ -229,16 +257,41 @@ function renderEl(el: Record<string, unknown>, key: string | number, schema: Por
       const size = lvl <= 1 ? "text-4xl md:text-5xl" : lvl === 2 ? "text-3xl md:text-4xl" : "text-2xl";
       const Tag = `h${lvl}` as "h1" | "h2" | "h3" | "h4";
       return (
-        <Tag key={key} className={`font-display text-paper ${size} ${ac}`}>
+        <Tag
+          key={key}
+          className={`font-display ${colorCls(str(el.color), "text-paper")} ${emphasisCls(el)} ${size} ${ac}`}
+        >
           {str(el.text)}
         </Tag>
       );
     }
     case "text":
       return (
-        <p key={key} className={`max-w-3xl leading-relaxed text-muted ${ac}`}>
+        <p
+          key={key}
+          className={`max-w-3xl leading-relaxed ${colorCls(str(el.color), "text-muted")} ${emphasisCls(el)} ${ac}`}
+        >
           {str(el.text)}
         </p>
+      );
+    case "stat":
+      return (
+        <div key={key} className={ac}>
+          <div className="font-display text-4xl text-gold md:text-5xl">{str(el.value)}</div>
+          {str(el.label) && <div className="mt-2 text-sm text-muted">{str(el.label)}</div>}
+        </div>
+      );
+    case "quote":
+      return (
+        <blockquote
+          key={key}
+          className="border-l-2 border-gold pl-5 text-lg italic leading-relaxed text-paper/90"
+        >
+          {str(el.text)}
+          {str(el.author) && (
+            <footer className="mt-2 text-sm not-italic text-muted">— {str(el.author)}</footer>
+          )}
+        </blockquote>
       );
     case "image":
       return (
@@ -306,7 +359,13 @@ export function CustomBlock({ props, schema }: BlockProps) {
   const elements = arr(props.elements);
   const title = str(props.title);
   const subtitle = str(props.subtitle);
-  const background = str(props.background);
+  // фон секции — токен темы (а не произвольный CSS): понятно и человеку, и ИИ
+  const bgToken: Record<string, string> = {
+    soft: "var(--ink-soft)",
+    ink: "var(--ink)",
+    accent: "var(--gold)",
+  };
+  const background = bgToken[str(props.background)] ?? "";
   const padded = props.padding !== "none";
   return (
     <section

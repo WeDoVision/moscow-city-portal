@@ -45,7 +45,17 @@ export async function PortalRenderer({ schema }: { schema: PortalSchema }) {
         .map((block) => {
           const Spec = BLOCKS[block.type];
           const Component = Spec.component;
-          return <Component key={block.id} props={block.props} schema={schema} data={data} />;
+          // аварийный CSS секции: оборачиваем в #b-<id> через CSS-вложенность —
+          // так стили ограничены этой секцией и не текут на весь портал
+          const css = typeof block.css === "string" ? block.css.replace(/<\/style/gi, "") : "";
+          return (
+            <div key={block.id} id={`b-${block.id}`}>
+              {css && (
+                <style dangerouslySetInnerHTML={{ __html: `#b-${block.id}{${css}}` }} />
+              )}
+              <Component props={block.props} schema={schema} data={data} />
+            </div>
+          );
         })}
     </PortalChrome>
   );
