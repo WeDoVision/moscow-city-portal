@@ -41,6 +41,8 @@ export type BlockType =
   | "city3d"
   | "towers"
   | "lotsGrid"
+  | "data"
+  | "catalog"
   | "about"
   | "faq"
   | "cta"

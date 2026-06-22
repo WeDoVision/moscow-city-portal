@@ -68,6 +68,27 @@ export const BLOCK_META: Record<BlockType, BlockMeta> = {
       { key: "limit", label: "Сколько карточек", kind: "number" },
     ],
   },
+  data: {
+    label: "Данные (источник + вид)",
+    fields: [
+      { key: "title", label: "Заголовок", kind: "text" },
+      { key: "subtitle", label: "Подзаголовок", kind: "text" },
+      {
+        key: "limit",
+        label: "Сколько показать",
+        kind: "number",
+        hint: "0 — все. Для вида «Один объект» берётся первый.",
+      },
+    ],
+  },
+  catalog: {
+    label: "Каталог с поиском и фильтрами",
+    heavy: true,
+    fields: [
+      { key: "title", label: "Заголовок", kind: "text" },
+      { key: "subtitle", label: "Подзаголовок", kind: "text" },
+    ],
+  },
   about: {
     label: "О портале + статистика",
     fields: [

@@ -39,7 +39,21 @@ function fmtMln(n: number | undefined): string {
  * Набор фильтров повторяет старый портал: сделка, категория (со счётчиками),
  * башня (со счётчиками), цена, площадь + спальни/сортировка как на whitewill.
  */
-export function Catalog({ initial }: { initial: LotFilterResult }) {
+export function Catalog({
+  initial,
+  basePath = "/",
+  towers,
+  portalSlug,
+}: {
+  initial: LotFilterResult;
+  /** куда синкать URL фильтров (по умолчанию корень эталонного сайта) */
+  basePath?: string;
+  /** список башен для фильтра (по умолчанию башни эталонного Москва-Сити) */
+  towers?: { id: number; name: string }[];
+  /** slug портала — карточки лотов получат ?portal=<slug> для наследования темы */
+  portalSlug?: string;
+}) {
+  const towerList = towers ?? portal.towers;
   const router = useRouter();
   const searchParams = useSearchParams();
   const [query, setQuery] = useState<CatalogQuery>(() => parseCatalogQuery(searchParams));
@@ -88,7 +102,7 @@ export function Catalog({ initial }: { initial: LotFilterResult }) {
       if ([...searchParams.keys()].length === 0) return;
     }
     const params = catalogQueryToParams(query);
-    router.replace(`/?${params}#catalog`, { scroll: false });
+    router.replace(`${basePath}?${params}#catalog`, { scroll: false });
     track("filter_change", {
       deal: query.deal,
       category: query.category ?? "all",
@@ -249,7 +263,7 @@ export function Catalog({ initial }: { initial: LotFilterResult }) {
 
         {/* башни со счётчиками */}
         <div className="no-scrollbar mt-4 flex gap-2 overflow-x-auto" role="group" aria-label="Башни">
-          {portal.towers.map((t) => (
+          {towerList.map((t) => (
             <button
               key={t.id}
               onClick={() => toggleTower(t.id)}
@@ -375,7 +389,7 @@ export function Catalog({ initial }: { initial: LotFilterResult }) {
         }`}
       >
         {lots.map((lot) => (
-          <LotCard key={`${lot.id}-${lot.domainEntity}`} lot={lot} />
+          <LotCard key={`${lot.id}-${lot.domainEntity}`} lot={lot} portalSlug={portalSlug} />
         ))}
       </div>
 

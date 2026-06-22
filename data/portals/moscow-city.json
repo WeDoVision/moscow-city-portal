@@ -60,7 +60,7 @@
         "elements": [
           {
             "kind": "html",
-            "html": "<div style=\"height:1px\"></div>"
+            "html": "<style>\n/* Улучшение читаемости текста в hero без изменения overlay: */\n/* 1) локальное затемнение под текст (мягкий тёмный градиент) */\n/* 2) лёгкая подсветка/тень на заголовках и подзаголовке */\n\n#hero{\n  position: relative;\n}\n\n#hero::before{\n  content:\"\";\n  position:absolute;\n  inset:0;\n  pointer-events:none;\n  /* Слой под текстом: сильнее слева (где обычно контент), мягко уходит вправо */\n  background:\n    radial-gradient(900px 520px at 18% 28%, rgba(0,0,0,0.48) 0%, rgba(0,0,0,0.28) 42%, rgba(0,0,0,0.00) 72%),\n    linear-gradient(90deg, rgba(0,0,0,0.22) 0%, rgba(0,0,0,0.06) 46%, rgba(0,0,0,0.00) 70%);\n  mix-blend-mode: normal;\n}\n\n/* Текстовые элементы hero (поддерживаем разные возможные классы) */\n#hero h1, #hero h2, #hero .title, #hero [data-hero-title]{\n  text-shadow:\n    0 2px 14px rgba(0,0,0,0.55),\n    0 1px 2px rgba(0,0,0,0.65);\n}\n\n#hero .subtitle, #hero p, #hero [data-hero-subtitle]{\n  text-shadow: 0 2px 10px rgba(0,0,0,0.45);\n}\n\n#hero .kicker, #hero [data-hero-kicker]{\n  text-shadow: 0 1px 8px rgba(0,0,0,0.45);\n}\n\n@media (prefers-reduced-motion: reduce){\n  #hero::before{ transition:none; }\n}\n</style>\n<div style=\"height:1px\"></div>"
           }
         ]
       }
@@ -70,7 +70,10 @@
       "type": "city3d",
       "enabled": true,
       "props": {
-        "title": "Москва-Сити в 3D"
+        "title": "Москва-Сити в 3D",
+        "camera": {
+          "autoRotate": false
+        }
       }
     },
     {
@@ -83,12 +86,26 @@
     },
     {
       "id": "lots",
-      "type": "lotsGrid",
+      "type": "catalog",
       "enabled": true,
       "props": {
         "title": "Актуальные объекты",
-        "subtitle": "Свежие лоты из базы whitewill",
-        "limit": 9
+        "subtitle": "Свежие лоты из базы whitewill"
+      }
+    },
+    {
+      "id": "lotsPriceBold",
+      "type": "custom",
+      "enabled": true,
+      "props": {
+        "title": " ",
+        "padding": "none",
+        "elements": [
+          {
+            "kind": "html",
+            "html": "<style>\n/* Жирная цена на карточках лотов в каталоге */\n/* Поддерживаем разные возможные селекторы цены в карточках */\n#lots [data-price],\n#lots .price,\n#lots .Price,\n#lots .lot-price,\n#lots [class*=\"price\" i]{\n  font-weight: 700;\n}\n\n/* Если цена обёрнута в элементы span/strong */\n#lots [data-price] *,\n#lots .price *,\n#lots .lot-price *{\n  font-weight: 700;\n}\n</style>"
+          }
+        ]
       }
     },
     {
@@ -127,6 +144,21 @@
           {
             "q": "Можно ли купить в рассрочку?",
             "a": "Да, у большинства застройщиков есть программы. Уточним под ваш объект."
+          }
+        ]
+      }
+    },
+    {
+      "id": "faqAnimations",
+      "type": "custom",
+      "enabled": true,
+      "props": {
+        "title": " ",
+        "padding": "none",
+        "elements": [
+          {
+            "kind": "html",
+            "html": "<style>\n/* FAQ раскрытие: плавная анимация */\n/* Поддерживает два варианта разметки: details/summary и aria-expanded */\n\n/* 1) details/summary */\n#faq details > *:not(summary){\n  overflow: hidden;\n}\n#faq details > *:not(summary){\n  animation: wwFaqFadeSlideIn 220ms ease-out;\n}\n#faq details:not([open]) > *:not(summary){\n  animation: wwFaqFadeSlideOut 160ms ease-in;\n}\n\n/* 2) aria-expanded (если FAQ реализован кнопкой/заголовком) */\n#faq [aria-expanded] + *{\n  overflow: hidden;\n  max-height: 0;\n  opacity: 0;\n  transform: translateY(-6px);\n  transition: max-height 260ms ease, opacity 180ms ease, transform 220ms ease;\n}\n#faq [aria-expanded=\"true\"] + *{\n  max-height: 600px; /* достаточно для типичных ответов */\n  opacity: 1;\n  transform: translateY(0);\n}\n\n@keyframes wwFaqFadeSlideIn{\n  from{ opacity:0; transform: translateY(-6px); }\n  to{ opacity:1; transform: translateY(0); }\n}\n@keyframes wwFaqFadeSlideOut{\n  from{ opacity:1; transform: translateY(0); }\n  to{ opacity:0; transform: translateY(-6px); }\n}\n\n@media (prefers-reduced-motion: reduce){\n  #faq details > *:not(summary),\n  #faq [aria-expanded] + *{\n    animation: none !important;\n    transition: none !important;\n  }\n}\n</style>"
           }
         ]
       }
