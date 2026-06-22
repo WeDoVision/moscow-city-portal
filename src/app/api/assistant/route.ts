@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { portal } from "@/portal.config";
 import { fetchLots, imageUrl, lotHeadline, lotPrice } from "@/lib/whitewill/client";
-import type { CatalogQuery, Category } from "@/lib/whitewill/types";
+import { COMPLEX_OPTIONS, DEVELOPERS, type CatalogQuery, type Category } from "@/lib/whitewill/types";
 import { aiException, fail, openaiHttpError } from "@/lib/portal/ai-errors";
 
 /**
@@ -33,6 +33,10 @@ ${TOWER_LIST}
    • «нижние/низкие этажи» → floorMax ~5-7; «высокие/верхние/видовые/панорамные/над городом» → floorMin ~25-30; «средние этажи» → floorMin ~8, floorMax ~20.
    • «красивый вид / видовая квартира» → ставь высокий этаж (floorMin ~25) как лучшее приближение и в комментарии скажи, что точный вид подберём с экспертом.
    • «с отделкой / под заезд / готовая / можно жить сразу» → decoration:["with_decoration"]; «без отделки / под свой ремонт / голые стены» → ["without_decoration"]; «предчистовая / white box» → ["whitebox"].
+   • «новостройка / от застройщика» → isSecondary:false; «вторичка / перепродажа» → isSecondary:true.
+   • «готовый дом / уже сдан / можно заехать / построен» → isBuilt:true; «строящийся / на котловане» → isBuilt:false. «сдача в 2026 / к 2027» → readinessYear:[2026].
+   • застройщик по имени («от Capital Group / Донстрой / Stone») → developer (по списку id в инструменте).
+   • инфраструктура/«особенности» («с паркингом / фитнесом / консьержем / коворкингом / панорамными окнами / детским садом / рестораном») → complexOption (по списку id в инструменте).
 4. Чего в фильтрах НЕТ (сторона света, конкретный вид из окна, меблировка, ремонт по дизайн-проекту) — не выдумывай фильтры: учти пожелание текстом, подбери ближайшее (этаж/отделка) и предложи уточнить у эксперта.
 5. После поиска коротко прокомментируй результат: сколько нашлось, что показал, какие варианты интереснее под запрос и почему. Не перечисляй лоты списком — карточки покажет интерфейс. 2-4 предложения.
 6. Если ничего не нашлось — предложи ослабить бюджет/параметры и сразу сделай повторный поиск с ослабленными фильтрами.
@@ -76,6 +80,29 @@ const SEARCH_TOOL = {
         },
         floorMin: { type: "integer", description: "Мин. этаж" },
         floorMax: { type: "integer", description: "Макс. этаж" },
+        isSecondary: {
+          type: "boolean",
+          description: "true = вторичка (перепродажа), false = новостройка (от застройщика)",
+        },
+        isBuilt: {
+          type: "boolean",
+          description: "true = дом уже сдан/построен, false = ещё строится",
+        },
+        readinessYear: {
+          type: "array",
+          items: { type: "integer" },
+          description: "Год сдачи комплекса (для строящихся), напр. [2026, 2027]",
+        },
+        developer: {
+          type: "array",
+          items: { type: "integer" },
+          description: `id застройщиков: ${DEVELOPERS.map((d) => `${d.value}=${d.label}`).join(", ")}`,
+        },
+        complexOption: {
+          type: "array",
+          items: { type: "integer" },
+          description: `id особенностей комплекса (инфраструктура): ${COMPLEX_OPTIONS.map((o) => `${o.value}=${o.label}`).join(", ")}`,
+        },
         sort: {
           type: "string",
           enum: ["price_asc", "price_desc", "area_asc", "area_desc"],
@@ -211,6 +238,19 @@ export async function POST(req: NextRequest) {
               : undefined,
             floorMin: typeof args.floorMin === "number" ? args.floorMin : undefined,
             floorMax: typeof args.floorMax === "number" ? args.floorMax : undefined,
+            isSecondary: typeof args.isSecondary === "boolean" ? args.isSecondary : undefined,
+            isBuilt: typeof args.isBuilt === "boolean" ? args.isBuilt : undefined,
+            readinessYear: Array.isArray(args.readinessYear)
+              ? (args.readinessYear as number[]).filter((n) => typeof n === "number")
+              : undefined,
+            developer: Array.isArray(args.developer)
+              ? (args.developer as number[]).filter((n) => DEVELOPERS.some((d) => d.value === n))
+              : undefined,
+            complexOption: Array.isArray(args.complexOption)
+              ? (args.complexOption as number[]).filter((n) =>
+                  COMPLEX_OPTIONS.some((o) => o.value === n),
+                )
+              : undefined,
             sort: typeof args.sort === "string" ? args.sort : undefined,
             page: 1,
           };

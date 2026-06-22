@@ -110,6 +110,16 @@ export type CatalogQuery = {
   /** этаж — диапазон */
   floorMin?: number;
   floorMax?: number;
+  /** true = вторичка, false = новостройка (is_secondary/bool_filter) */
+  isSecondary?: boolean;
+  /** true = дом сдан, false = строится (is_built/bool_filter) */
+  isBuilt?: boolean;
+  /** год сдачи комплекса (readiness_year/int_multiple_filter) */
+  readinessYear?: number[];
+  /** застройщики — id из DEVELOPERS (developer/custom) */
+  developer?: number[];
+  /** особенности комплекса — id из COMPLEX_OPTIONS (complex_option/custom) */
+  complexOption?: number[];
   sort?: string; // "price_asc" | "price_desc" | "area_asc" | "area_desc"
   page?: number;
 };
@@ -119,6 +129,44 @@ export const DECORATION_OPTIONS: { value: string; label: string }[] = [
   { value: "with_decoration", label: "С отделкой" },
   { value: "without_decoration", label: "Без отделки" },
   { value: "whitebox", label: "White box" },
+];
+
+/** Особенности комплекса (complex_option/custom) — id из фильтр-схемы whitewill */
+export const COMPLEX_OPTIONS: { value: number; label: string }[] = [
+  { value: 81, label: "приватная территория" },
+  { value: 98, label: "паркинг" },
+  { value: 82, label: "детские площадки" },
+  { value: 91, label: "лаунж-пространство" },
+  { value: 84, label: "панорамное остекление" },
+  { value: 93, label: "кафе" },
+  { value: 85, label: "консьерж-сервис" },
+  { value: 99, label: "фитнес-клуб" },
+  { value: 90, label: "спортивная площадка" },
+  { value: 87, label: "маркет" },
+  { value: 83, label: "кладовые" },
+  { value: 88, label: "ресторан" },
+  { value: 86, label: "детский сад" },
+  { value: 89, label: "салон красоты" },
+  { value: 94, label: "коворкинг" },
+];
+
+/** Застройщики (developer/custom) — id из фильтр-схемы whitewill */
+export const DEVELOPERS: { value: number; label: string }[] = [
+  { value: 12, label: "Capital Group" },
+  { value: 100, label: "Донстрой" },
+  { value: 177, label: "Pioneer" },
+  { value: 38, label: "Stone" },
+  { value: 15, label: "Sminex" },
+  { value: 78, label: "Группа ЛСР" },
+  { value: 127, label: "Level Group" },
+  { value: 24, label: "ФСК Лидер" },
+  { value: 522, label: "MR Private" },
+  { value: 427, label: "Forma" },
+  { value: 295, label: "Upside Development" },
+  { value: 462, label: "Regions Development" },
+  { value: 31, label: "Колди" },
+  { value: 456, label: "РКС Девелопмент" },
+  { value: 340, label: "Tekta Group" },
 ];
 
 /** Счётчики для панели фильтров (как на старом портале) */

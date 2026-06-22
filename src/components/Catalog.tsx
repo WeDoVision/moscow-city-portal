@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { portal } from "@/portal.config";
 import {
   CATEGORIES,
+  COMPLEX_OPTIONS,
   DECORATION_OPTIONS,
   type CatalogCounts,
   type CatalogQuery,
@@ -189,6 +190,16 @@ export function Catalog({
     else cur.add(v);
     apply({ decoration: [...cur] });
   };
+
+  const toggleOption = (v: number) => {
+    const cur = new Set(query.complexOption ?? []);
+    if (cur.has(v)) cur.delete(v);
+    else cur.add(v);
+    apply({ complexOption: [...cur] });
+  };
+  /** тумблер «значение ↔ выкл» для tri-state булевых фильтров */
+  const setTri = (key: "isSecondary" | "isBuilt", v: boolean) =>
+    apply({ [key]: query[key] === v ? undefined : v } as Partial<CatalogQuery>);
 
   const isResidential = !query.category || query.category === "flat" || query.category === "apartment";
 
@@ -420,6 +431,26 @@ export function Catalog({
             </div>
           )}
 
+          {/* новостройка/вторичка + готовность */}
+          <div className="flex items-center gap-1 rounded-full border border-ink-line/60 p-1" role="group" aria-label="Тип и готовность">
+            {([
+              ["isSecondary", false, "Новостройка"],
+              ["isSecondary", true, "Вторичка"],
+              ["isBuilt", true, "Сдан"],
+            ] as const).map(([key, val, label]) => (
+              <button
+                key={label}
+                onClick={() => setTri(key, val)}
+                aria-pressed={query[key] === val}
+                className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
+                  query[key] === val ? "bg-gold text-ink" : "text-paper/70 hover:text-paper"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
           <select
             value={query.sort ?? "price_asc"}
             onChange={(e) => apply({ sort: e.target.value })}
@@ -442,6 +473,26 @@ export function Catalog({
             </button>
           )}
         </div>
+
+        {/* особенности комплекса (инфраструктура) */}
+        {isResidential && (
+          <div className="no-scrollbar mt-3 flex gap-2 overflow-x-auto" role="group" aria-label="Особенности комплекса">
+            {COMPLEX_OPTIONS.map((o) => (
+              <button
+                key={o.value}
+                onClick={() => toggleOption(o.value)}
+                aria-pressed={query.complexOption?.includes(o.value) ?? false}
+                className={`shrink-0 rounded-full border px-3 py-1 text-xs transition-colors ${
+                  query.complexOption?.includes(o.value)
+                    ? "border-gold bg-gold/15 text-gold"
+                    : "border-ink-line/60 text-paper/70 hover:border-paper/40 hover:text-paper"
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── Результаты ──────────────────────────────────────────────── */}
