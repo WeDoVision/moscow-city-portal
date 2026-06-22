@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import type { Block, BlockType, Card, PortalSchema, Theme } from "@/lib/portal/schema";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import type { Block, BlockType, Brand, Card, PortalSchema, Theme } from "@/lib/portal/schema";
 import { BLOCK_META, BLOCK_TYPES } from "@/lib/portal/blocks-meta";
 import {
   SLOTS,
@@ -13,6 +14,7 @@ import {
   resolveFields,
   type SourceId,
 } from "@/lib/portal/sources";
+import { FONT_OPTIONS, familiesFromFontUrl } from "@/lib/portal/fonts";
 
 /**
  * Редактор портала (KRE-124). Гибридная модель: админ управляет UI/UX —
@@ -379,6 +381,73 @@ const FLD =
   "w-full rounded-md border border-ink-line/50 bg-ink px-3 py-2 text-sm text-paper placeholder:text-paper/30 focus:border-gold focus:outline-none";
 const SELECT = FLD + " cursor-pointer";
 
+/**
+ * Выбор шрифта: одно поле-выпадашка (набор + «Другой по ссылке»). При выборе
+ * «Другой по ссылке» появляется поле URL; название шрифта берётся из ссылки само.
+ */
+function FontPicker({
+  label,
+  value,
+  defaultKey,
+  fontUrl,
+  onChange,
+  onUrl,
+}: {
+  label: string;
+  value: string | undefined;
+  defaultKey: string;
+  /** общая ссылка темы на шрифты (Google Fonts и т.п.) */
+  fontUrl: string | undefined;
+  /** выбор шрифта из набора */
+  onChange: (v: string) => void;
+  /** установить ссылку + имя семейства из неё одним изменением */
+  onUrl: (url: string, family: string) => void;
+}) {
+  const curated = FONT_OPTIONS.some((o) => o.key === value);
+  const [linkMode, setLinkMode] = useState(!!value && !curated);
+  return (
+    <label className="block text-[13px] text-paper/70">
+      {label}
+      <select
+        value={linkMode ? "__url" : value || defaultKey}
+        onChange={(e) => {
+          if (e.target.value === "__url") {
+            setLinkMode(true);
+            onChange(familiesFromFontUrl(fontUrl)[0] ?? "");
+          } else {
+            setLinkMode(false);
+            onChange(e.target.value);
+          }
+        }}
+        className={`mt-1.5 ${SELECT}`}
+      >
+        {FONT_OPTIONS.map((f) => (
+          <option key={f.key} value={f.key}>
+            {f.label}
+          </option>
+        ))}
+        <option value="__url">Другой по ссылке…</option>
+      </select>
+      {linkMode && (
+        <div className="mt-2 space-y-1">
+          <input
+            type="text"
+            value={fontUrl ?? ""}
+            onChange={(e) => onUrl(e.target.value, familiesFromFontUrl(e.target.value)[0] ?? "")}
+            placeholder="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;600&display=swap"
+            className={FLD}
+          />
+          <p className="text-[11px] leading-snug text-paper/40">
+            {value
+              ? `Шрифт: ${value}`
+              : "Вставьте ссылку с fonts.google.com — название возьмётся из неё само."}
+          </p>
+        </div>
+      )}
+    </label>
+  );
+}
+
 /** Кнопки управления элементом списка: вверх/вниз/удалить. */
 function RowControls({
   onUp,
@@ -509,12 +578,14 @@ type El = Record<string, unknown>;
 const EL_KINDS: { kind: string; label: string }[] = [
   { kind: "heading", label: "Заголовок" },
   { kind: "text", label: "Текст" },
+  { kind: "stat", label: "Цифра" },
+  { kind: "quote", label: "Цитата" },
   { kind: "image", label: "Картинка" },
   { kind: "button", label: "Кнопка" },
   { kind: "columns", label: "Колонки" },
   { kind: "divider", label: "Разделитель" },
   { kind: "spacer", label: "Отступ" },
-  { kind: "html", label: "HTML" },
+  { kind: "html", label: "HTML (продвинутое)" },
 ];
 const EL_LABEL: Record<string, string> = Object.fromEntries(EL_KINDS.map((k) => [k.kind, k.label]));
 const ALIGN_OPTS = [
@@ -537,12 +608,65 @@ function ElementFields({ el, set }: { el: El; set: (patch: El) => void }) {
       </select>
     </label>
   );
+  const colorSel = (
+    <label className="block text-[12px] text-paper/60">
+      Цвет
+      <select value={s("color") || ""} onChange={(e) => set({ color: e.target.value })} className={`mt-1 ${SELECT}`}>
+        <option value="">По умолчанию</option>
+        <option value="accent">Акцент</option>
+        <option value="muted">Приглушённый</option>
+        <option value="paper">Светлый</option>
+      </select>
+    </label>
+  );
+  const b = (k: string) => el[k] === true;
+  const chip = (on: boolean) =>
+    `rounded-lg border px-4 py-2 text-sm transition ${
+      on
+        ? "border-gold bg-gold/10 text-paper"
+        : "border-ink-line/50 text-paper/70 hover:border-paper/40"
+    }`;
+  const emphasisRow = (
+    <div className="grid grid-cols-2 gap-2">
+      <label className="block text-[12px] text-paper/60">
+        Начертание
+        <select value={s("weight") || ""} onChange={(e) => set({ weight: e.target.value })} className={`mt-1 ${SELECT}`}>
+          <option value="">Обычное</option>
+          <option value="light">Тонкое</option>
+          <option value="medium">Средне-жирное</option>
+          <option value="semibold">Полужирное</option>
+          <option value="bold">Жирное</option>
+        </select>
+      </label>
+      <div className="text-[12px] text-paper/60">
+        Стиль
+        <div className="mt-1 flex gap-2">
+          <button
+            type="button"
+            aria-pressed={b("italic")}
+            onClick={() => set({ italic: !b("italic") })}
+            className={`${chip(b("italic"))} italic`}
+          >
+            Курсив
+          </button>
+          <button
+            type="button"
+            aria-pressed={b("uppercase")}
+            onClick={() => set({ uppercase: !b("uppercase") })}
+            className={`${chip(b("uppercase"))} uppercase tracking-wide`}
+          >
+            Заглавные
+          </button>
+        </div>
+      </div>
+    </div>
+  );
   switch (s("kind")) {
     case "heading":
       return (
         <div className="space-y-2">
           <input placeholder="Текст заголовка" value={s("text")} onChange={(e) => set({ text: e.target.value })} className={FLD} />
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <label className="block text-[12px] text-paper/60">
               Размер
               <select value={String(n("level") || 2)} onChange={(e) => set({ level: Number(e.target.value) })} className={`mt-1 ${SELECT}`}>
@@ -553,14 +677,35 @@ function ElementFields({ el, set }: { el: El; set: (patch: El) => void }) {
               </select>
             </label>
             {alignSel}
+            {colorSel}
           </div>
+          {emphasisRow}
         </div>
       );
     case "text":
       return (
         <div className="space-y-2">
           <textarea rows={3} placeholder="Текст абзаца" value={s("text")} onChange={(e) => set({ text: e.target.value })} className={FLD} />
+          <div className="grid grid-cols-2 gap-2">
+            {alignSel}
+            {colorSel}
+          </div>
+          {emphasisRow}
+        </div>
+      );
+    case "stat":
+      return (
+        <div className="space-y-2">
+          <input placeholder="Значение (напр. «15 лет», «220+»)" value={s("value")} onChange={(e) => set({ value: e.target.value })} className={FLD} />
+          <input placeholder="Подпись (напр. «на рынке»)" value={s("label")} onChange={(e) => set({ label: e.target.value })} className={FLD} />
           {alignSel}
+        </div>
+      );
+    case "quote":
+      return (
+        <div className="space-y-2">
+          <textarea rows={3} placeholder="Текст цитаты" value={s("text")} onChange={(e) => set({ text: e.target.value })} className={FLD} />
+          <input placeholder="Автор (необязательно)" value={s("author")} onChange={(e) => set({ author: e.target.value })} className={FLD} />
         </div>
       );
     case "image":
@@ -677,19 +822,34 @@ function ElementsField({ value, onChange }: { value: unknown; onChange: (v: El[]
 }
 
 export function PortalEditor({ initial }: { initial: PortalSchema }) {
+  const router = useRouter();
   const [schema, setSchema] = useState<PortalSchema>(initial);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  // исходный slug портала (из маршрута) — чтобы при переименовании удалить старый файл
+  const originalSlug = useRef(initial.slug);
 
   // AI-правка существующего портала — в виде чата с фидбеком
   type ChatMsg = { role: "user" | "assistant"; text: string };
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+
+  // как в обычном чате: при новых сообщениях/индикаторе скроллим ленту вниз
+  useEffect(() => {
+    const el = chatScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages, aiBusy]);
 
   function update(patch: Partial<PortalSchema>) {
     setSchema((s) => ({ ...s, ...patch }));
     setSaved(false);
+  }
+
+  function updateBrand(patch: Partial<Brand>) {
+    update({ brand: { ...schema.brand, ...patch } });
   }
 
   /** правка карточки на главной; пустые поля убираем, чтобы наследовать тему */
@@ -780,13 +940,28 @@ export function PortalEditor({ initial }: { initial: PortalSchema }) {
 
   async function save() {
     setSaving(true);
+    setSaveError(null);
     try {
       const res = await fetch("/api/admin/portals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(schema),
+        body: JSON.stringify({ schema, prevSlug: originalSlug.current }),
       });
-      if (res.ok) setSaved(true);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSaveError(typeof data.message === "string" ? data.message : "Не удалось сохранить.");
+        return;
+      }
+      setSaved(true);
+      const newSlug = typeof data.slug === "string" ? data.slug : schema.slug;
+      // адрес портала мог поменяться — синхронизируем стейт и маршрут админки
+      if (newSlug !== schema.slug) setSchema((s) => ({ ...s, slug: newSlug }));
+      if (newSlug !== originalSlug.current) {
+        originalSlug.current = newSlug;
+        router.replace(`/admin/${newSlug}`);
+      }
+    } catch {
+      setSaveError("Сеть недоступна.");
     } finally {
       setSaving(false);
     }
@@ -818,9 +993,38 @@ export function PortalEditor({ initial }: { initial: PortalSchema }) {
           </button>
         </div>
       </div>
+      {saveError && <p className="mt-3 text-sm text-red-500">{saveError}</p>}
 
-      <h1 className="mt-6 text-3xl font-semibold tracking-tight">{schema.name}</h1>
-      <p className="mt-1 text-sm text-paper/50">/{schema.slug}</p>
+      <div className="mt-6 space-y-3">
+        <label className="block text-[13px] text-paper/70">
+          Название портала
+          <input
+            type="text"
+            value={schema.name}
+            onChange={(e) => update({ name: e.target.value })}
+            className={`mt-1 ${inputCls} text-lg font-semibold`}
+          />
+        </label>
+        <label className="block text-[13px] text-paper/70">
+          Адрес портала
+          <div className="mt-1 flex items-center gap-1.5">
+            <span className="shrink-0 text-sm text-paper/40">/p/</span>
+            <input
+              type="text"
+              value={schema.slug}
+              onChange={(e) =>
+                update({ slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]+/g, "-") })
+              }
+              className={inputCls}
+            />
+          </div>
+          {schema.slug !== originalSlug.current && (
+            <p className="mt-1 text-[11px] leading-snug text-paper/40">
+              Адрес изменится на /p/{schema.slug || "…"} — старая ссылка перестанет работать.
+            </p>
+          )}
+        </label>
+      </div>
 
       {/* AI-чат: правка портала текстом с фидбеком */}
       <section className="mt-8 border border-ink-line/60 bg-ink-soft p-5">
@@ -831,7 +1035,7 @@ export function PortalEditor({ initial }: { initial: PortalSchema }) {
         </p>
 
         {messages.length > 0 && (
-          <div className="mt-4 max-h-80 space-y-2 overflow-y-auto">
+          <div ref={chatScrollRef} className="mt-4 max-h-80 space-y-2 overflow-y-auto">
             {messages.map((m, i) => (
               <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
                 <div
@@ -898,6 +1102,105 @@ export function PortalEditor({ initial }: { initial: PortalSchema }) {
             value={schema.theme.radius}
             onChange={(v) => update({ theme: { ...schema.theme, radius: v } })}
           />
+        </div>
+        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FontPicker
+            label="Шрифт заголовков"
+            value={schema.theme.fontDisplay}
+            defaultKey="prata"
+            fontUrl={schema.theme.fontUrl}
+            onChange={(v) => update({ theme: { ...schema.theme, fontDisplay: v } })}
+            onUrl={(url, fam) => update({ theme: { ...schema.theme, fontUrl: url, fontDisplay: fam } })}
+          />
+          <FontPicker
+            label="Основной шрифт"
+            value={schema.theme.fontBody}
+            defaultKey="manrope"
+            fontUrl={schema.theme.fontUrl}
+            onChange={(v) => update({ theme: { ...schema.theme, fontBody: v } })}
+            onUrl={(url, fam) => update({ theme: { ...schema.theme, fontUrl: url, fontBody: fam } })}
+          />
+        </div>
+      </section>
+
+      {/* Бренд и контакты — то, что видно в шапке/подвале портала */}
+      <section className="mt-8 rounded-xl border border-ink-line/40 bg-ink-soft p-5">
+        <h2 className="text-base font-semibold">Бренд и контакты</h2>
+        <p className="mt-1 text-sm text-paper/50">Логотип в шапке, телефон и контакты портала.</p>
+
+        <div className="mt-4 text-[13px] text-paper/70">
+          Логотип в шапке (две части)
+          <div className="mt-1.5 grid grid-cols-2 gap-3">
+            <input
+              type="text"
+              value={schema.brand.logo[0]}
+              onChange={(e) => updateBrand({ logo: [e.target.value, schema.brand.logo[1]] })}
+              placeholder="MOSCOW CITY"
+              className={inputCls}
+            />
+            <input
+              type="text"
+              value={schema.brand.logo[1]}
+              onChange={(e) => updateBrand({ logo: [schema.brand.logo[0], e.target.value] })}
+              placeholder="SALE"
+              className={inputCls}
+            />
+          </div>
+          <p className="mt-1 text-[11px] text-paper/40">Первая часть — акцентным цветом, вторая — обычным.</p>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <label className="block text-[13px] text-paper/70">
+            Телефон
+            <input
+              type="text"
+              value={schema.brand.phone}
+              onChange={(e) =>
+                updateBrand({ phone: e.target.value, phoneHref: `tel:${e.target.value.replace(/[^\d+]/g, "")}` })
+              }
+              placeholder="+7 (495) 255-01-61"
+              className={`mt-1 ${inputCls}`}
+            />
+          </label>
+          <label className="block text-[13px] text-paper/70">
+            Название в подвале (©)
+            <input
+              type="text"
+              value={schema.brand.name}
+              onChange={(e) => updateBrand({ name: e.target.value })}
+              className={`mt-1 ${inputCls}`}
+            />
+          </label>
+          <label className="block text-[13px] text-paper/70">
+            WhatsApp (ссылка)
+            <input
+              type="text"
+              value={schema.brand.whatsapp}
+              onChange={(e) => updateBrand({ whatsapp: e.target.value })}
+              placeholder="https://wa.me/74952550161"
+              className={`mt-1 ${inputCls}`}
+            />
+          </label>
+          <label className="block text-[13px] text-paper/70">
+            Telegram (ссылка)
+            <input
+              type="text"
+              value={schema.brand.telegram}
+              onChange={(e) => updateBrand({ telegram: e.target.value })}
+              placeholder="https://t.me/…"
+              className={`mt-1 ${inputCls}`}
+            />
+          </label>
+          <label className="block text-[13px] text-paper/70 sm:col-span-2">
+            Email
+            <input
+              type="text"
+              value={schema.brand.email}
+              onChange={(e) => updateBrand({ email: e.target.value })}
+              placeholder="info@whitewill.ru"
+              className={`mt-1 ${inputCls}`}
+            />
+          </label>
         </div>
       </section>
 
@@ -998,14 +1301,7 @@ export function PortalEditor({ initial }: { initial: PortalSchema }) {
                 className={`rounded-xl border p-4 ${b.enabled === false ? "border-ink-line/20 opacity-50" : "border-ink-line/40"} bg-ink-soft`}
               >
                 <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold">
-                    {meta?.label ?? b.type}
-                    {meta?.heavy && (
-                      <span className="ml-2 rounded bg-ink px-2 py-0.5 text-[10px] uppercase tracking-wide text-paper/50">
-                        логика на нас
-                      </span>
-                    )}
-                  </div>
+                  <div className="text-sm font-semibold">{meta?.label ?? b.type}</div>
                   <div className="flex items-center gap-1 text-paper/60">
                     <button
                       onClick={() => move(i, -1)}
@@ -1100,6 +1396,36 @@ export function PortalEditor({ initial }: { initial: PortalSchema }) {
                           </div>
                         );
                       }
+                      if (field.kind === "select") {
+                        const cur = typeof val === "string" ? val : "";
+                        return (
+                          <div key={field.key} className="text-[13px] text-paper/70">
+                            {field.label}
+                            <div className="mt-1.5 flex flex-wrap gap-2">
+                              {(field.options ?? []).map((o) => {
+                                const sel = cur === o.value;
+                                return (
+                                  <button
+                                    key={o.value}
+                                    type="button"
+                                    onClick={() => setBlockProp(b.id, field.key, o.value)}
+                                    className={`rounded-lg border px-4 py-2 text-sm transition ${
+                                      sel
+                                        ? "border-gold bg-gold/10 text-paper"
+                                        : "border-ink-line/50 text-paper/70 hover:border-paper/40"
+                                    }`}
+                                  >
+                                    {o.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            {field.hint && (
+                              <p className="mt-1 text-[11px] leading-snug text-paper/40">{field.hint}</p>
+                            )}
+                          </div>
+                        );
+                      }
                       return (
                         <label key={field.key} className="block text-[13px] text-paper/70">
                           {field.label}
@@ -1134,6 +1460,25 @@ export function PortalEditor({ initial }: { initial: PortalSchema }) {
                     })}
                   </div>
                 )}
+
+                {/* Расширенные настройки: CSS, ограниченный этой секцией */}
+                <details className="mt-3 border-t border-ink-line/30 pt-3">
+                  <summary className="cursor-pointer text-[12px] text-paper/50 hover:text-paper/80">
+                    Расширенные настройки (CSS)
+                  </summary>
+                  <p className="mt-2 text-[11px] leading-snug text-paper/40">
+                    Только на крайний случай — то, чего не задать настройками выше. Стили действуют
+                    ТОЛЬКО внутри этой секции.
+                  </p>
+                  <textarea
+                    rows={4}
+                    spellCheck={false}
+                    value={b.css ?? ""}
+                    onChange={(e) => updateBlock(b.id, { css: e.target.value })}
+                    placeholder={"напр.\nh2 { letter-spacing: .04em }\n.gold-deep-bg { background: var(--ink-soft) }"}
+                    className="mt-2 w-full rounded-md border border-ink-line/50 bg-ink px-3 py-2 font-mono text-xs text-paper focus:border-gold focus:outline-none"
+                  />
+                </details>
               </div>
             );
           })}
