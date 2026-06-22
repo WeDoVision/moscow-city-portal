@@ -12,6 +12,8 @@
  * так логика остаётся «на нас», а наверх отдаётся только UI/UX.
  */
 
+import { fontCss } from "./fonts";
+
 /** Дизайн-токены. Накладываются как CSS-переменные на обёртку портала. */
 export type Theme = {
   /** базовый фон */
@@ -27,6 +29,12 @@ export type Theme = {
   muted: string;
   /** общий радиус скруглений, напр. "0.125rem" или "1rem" */
   radius: string;
+  /** шрифт заголовков: ключ из FONT_OPTIONS ИЛИ имя своего семейства (грузится fontUrl) */
+  fontDisplay?: string;
+  /** основной шрифт текста: ключ из FONT_OPTIONS ИЛИ имя своего семейства (грузится fontUrl) */
+  fontBody?: string;
+  /** ссылка на CSS со шрифтами (напр. Google Fonts) — чтобы подключить свой шрифт по URL */
+  fontUrl?: string;
 };
 
 /** Данные, которые показывает портал. Это «логика» — правит только команда. */
@@ -55,6 +63,12 @@ export type Block = {
   type: BlockType;
   /** выключенный блок остаётся в схеме, но не рендерится */
   enabled?: boolean;
+  /**
+   * Аварийный люк: произвольный CSS, ОГРАНИЧЕННЫЙ этой секцией (движок оборачивает
+   * его в `#b-<id> { … }`). Только для того, чего не выразить токенами; в админке —
+   * под «Расширенные настройки».
+   */
+  css?: string;
   props: Record<string, unknown>;
 };
 
@@ -111,6 +125,7 @@ export const DEFAULT_THEME: Theme = {
 
 /** Тема → набор CSS-переменных для inline-style обёртки портала. */
 export function themeToCssVars(theme: Theme): Record<string, string> {
+  const bodyDefault = "var(--font-manrope), 'Manrope', system-ui, sans-serif";
   return {
     "--ink": theme.ink,
     "--ink-soft": theme.inkSoft,
@@ -121,5 +136,8 @@ export function themeToCssVars(theme: Theme): Record<string, string> {
     "--gold-deep": theme.goldDeep,
     "--muted": theme.muted,
     "--portal-radius": theme.radius,
+    // шрифты портала: заголовочный (дефолт Prata) и основной (дефолт Manrope)
+    "--font-display": fontCss(theme.fontDisplay),
+    "--font-sans": theme.fontBody ? fontCss(theme.fontBody) : bodyDefault,
   };
 }

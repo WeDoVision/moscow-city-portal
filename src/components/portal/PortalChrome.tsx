@@ -9,8 +9,12 @@ import { themeToCssVars } from "@/lib/portal/schema";
  */
 export function PortalChrome({ schema, children }: { schema: PortalSchema; children: ReactNode }) {
   const style = themeToCssVars(schema.theme) as CSSProperties;
+  // свой шрифт по ссылке (Google Fonts и т.п.) — только https
+  const fontUrl = /^https:\/\//i.test(schema.theme.fontUrl ?? "") ? schema.theme.fontUrl : null;
   return (
     <div style={style} className="min-h-screen bg-ink text-paper">
+      {/* eslint-disable-next-line @next/next/no-page-custom-font */}
+      {fontUrl && <link rel="stylesheet" href={fontUrl} />}
       <header className="sticky top-0 z-40 border-b border-ink-line/40 bg-ink/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <a href={`/p/${schema.slug}`} className="font-display text-lg tracking-wide text-paper">
