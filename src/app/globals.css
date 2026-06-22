@@ -97,3 +97,29 @@ select:focus-visible {
   outline: 2px solid var(--gold);
   outline-offset: 2px;
 }
+
+/* Админка — прямоугольная: обнуляем скругления у утилит rounded-*.
+   Инлайновые превью радиуса (редактор темы) не имеют класса rounded и
+   сохраняют своё скругление. */
+.admin-scope [class*="rounded"] {
+  border-radius: 0 !important;
+}
+
+/* FAQ-аккордеон: поворот иконки и плавное раскрытие ответа.
+   Рукописные правила (не утилиты Tailwind) — применяются гарантированно. */
+.faq-chevron {
+  transition: transform 300ms ease;
+}
+.faq-item[data-open="true"] .faq-chevron {
+  transform: rotate(180deg);
+}
+.faq-answer {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 350ms ease, opacity 250ms ease;
+}
+.faq-item[data-open="true"] .faq-answer {
+  max-height: 600px;
+  opacity: 1;
+}

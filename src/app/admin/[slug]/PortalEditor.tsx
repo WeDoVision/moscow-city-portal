@@ -4,6 +4,15 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { Block, BlockType, Card, PortalSchema, Theme } from "@/lib/portal/schema";
 import { BLOCK_META, BLOCK_TYPES } from "@/lib/portal/blocks-meta";
+import {
+  SLOTS,
+  SORTS,
+  SOURCES,
+  VIEWS,
+  isSourceId,
+  resolveFields,
+  type SourceId,
+} from "@/lib/portal/sources";
 
 /**
  * Редактор портала (KRE-124). Гибридная модель: админ управляет UI/UX —
@@ -125,6 +134,169 @@ function MapColorsEditor({
               onChange={(v) => onChange({ ...colors, [f.key]: v })}
             />
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Параметры камеры 3D-карты (city3d) ── */
+function CameraEditor({
+  camera,
+  onChange,
+}: {
+  camera: Record<string, unknown> | null;
+  onChange: (v: Record<string, unknown>) => void;
+}) {
+  const cam = camera ?? {};
+  const azimuth = typeof cam.azimuth === "number" ? cam.azimuth : -0.65;
+  const elevation = typeof cam.elevation === "number" ? cam.elevation : 0.55;
+  const autoRotate = cam.autoRotate === true;
+  const set = (patch: Record<string, unknown>) => onChange({ ...cam, ...patch });
+  return (
+    <div className="mt-3 rounded-lg border border-ink-line/30 p-3">
+      <div className="text-[13px] font-medium text-paper/70">Камера</div>
+      <label className="mt-3 block text-[12px] text-paper/60">
+        Поворот (угол): {azimuth.toFixed(2)}
+        <input
+          type="range"
+          min={-3.14}
+          max={3.14}
+          step={0.01}
+          value={azimuth}
+          onChange={(e) => set({ azimuth: Number(e.target.value) })}
+          className="mt-1 w-full accent-gold"
+        />
+      </label>
+      <label className="mt-3 block text-[12px] text-paper/60">
+        Удаление / высота: {elevation.toFixed(2)}
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.01}
+          value={elevation}
+          onChange={(e) => set({ elevation: Number(e.target.value) })}
+          className="mt-1 w-full accent-gold"
+        />
+      </label>
+      <label className="mt-3 flex cursor-pointer items-center gap-2 text-[12px] text-paper/60">
+        <input
+          type="checkbox"
+          checked={autoRotate}
+          onChange={(e) => set({ autoRotate: e.target.checked })}
+          className="accent-gold"
+        />
+        Автоповорот
+      </label>
+    </div>
+  );
+}
+
+/* ── Редактор блока «Данные»: источник × вид × маппинг полей ── */
+function DataBlockEditor({
+  props,
+  setMany,
+}: {
+  props: Record<string, unknown>;
+  setMany: (patch: Record<string, unknown>) => void;
+}) {
+  const source: SourceId = isSourceId(props.source) ? props.source : "lots";
+  const view = typeof props.view === "string" ? props.view : "cards";
+  const sort = typeof props.sort === "string" ? props.sort : "default";
+  const fields = resolveFields(source, props.fields);
+  const columns = Array.isArray(props.columns) ? (props.columns as string[]) : [];
+  const srcFields = SOURCES[source].fields;
+
+  return (
+    <div className="mt-3 space-y-3 rounded-lg border border-ink-line/30 p-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <label className="block text-[12px] text-paper/60">
+          Источник
+          <select
+            value={source}
+            onChange={(e) => setMany({ source: e.target.value, fields: undefined, columns: undefined })}
+            className={`mt-1 ${SELECT}`}
+          >
+            {(Object.keys(SOURCES) as SourceId[]).map((id) => (
+              <option key={id} value={id}>
+                {SOURCES[id].label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-[12px] text-paper/60">
+          Вид
+          <select value={view} onChange={(e) => setMany({ view: e.target.value })} className={`mt-1 ${SELECT}`}>
+            {VIEWS.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-[12px] text-paper/60">
+          Сортировка
+          <select value={sort} onChange={(e) => setMany({ sort: e.target.value })} className={`mt-1 ${SELECT}`}>
+            {SORTS.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {view === "table" ? (
+        <div className="text-[12px] text-paper/60">
+          Колонки таблицы
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {srcFields
+              .filter((f) => f.key !== "image")
+              .map((f) => {
+                const on = columns.length ? columns.includes(f.key) : false;
+                return (
+                  <button
+                    key={f.key}
+                    type="button"
+                    onClick={() =>
+                      setMany({
+                        columns: on ? columns.filter((c) => c !== f.key) : [...columns, f.key],
+                      })
+                    }
+                    className={`rounded-full border px-3 py-1 text-xs transition ${
+                      on ? "border-gold bg-gold/10 text-paper" : "border-ink-line/50 text-paper/60 hover:border-paper/40"
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                );
+              })}
+          </div>
+          <p className="mt-1.5 text-[11px] text-paper/40">Пусто — первые 5 полей.</p>
+        </div>
+      ) : (
+        <div className="text-[12px] text-paper/60">
+          Что показывать (поле → место в карточке)
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {SLOTS.map((s) => (
+              <label key={s.id} className="block text-[11px] text-paper/50">
+                {s.label}
+                <select
+                  value={fields[s.id] || ""}
+                  onChange={(e) => setMany({ fields: { ...fields, [s.id]: e.target.value } })}
+                  className={`mt-1 ${SELECT}`}
+                >
+                  <option value="">—</option>
+                  {srcFields.map((f) => (
+                    <option key={f.key} value={f.key}>
+                      {f.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -509,10 +681,11 @@ export function PortalEditor({ initial }: { initial: PortalSchema }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  // AI-правка существующего портала
+  // AI-правка существующего портала — в виде чата с фидбеком
+  type ChatMsg = { role: "user" | "assistant"; text: string };
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
-  const [aiError, setAiError] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMsg[]>([]);
 
   function update(patch: Partial<PortalSchema>) {
     setSchema((s) => ({ ...s, ...patch }));
@@ -538,6 +711,13 @@ export function PortalEditor({ initial }: { initial: PortalSchema }) {
     updateBlock(id, { props: { ...b.props, [key]: value } });
   }
 
+  /** Обновить несколько пропсов блока за один раз (для составных редакторов). */
+  function setBlockProps(id: string, patch: Record<string, unknown>) {
+    const b = schema.blocks.find((x) => x.id === id);
+    if (!b) return;
+    updateBlock(id, { props: { ...b.props, ...patch } });
+  }
+
   function move(index: number, dir: -1 | 1) {
     const next = [...schema.blocks];
     const target = index + dir;
@@ -560,30 +740,39 @@ export function PortalEditor({ initial }: { initial: PortalSchema }) {
     update({ blocks: [...schema.blocks, block] });
   }
 
-  async function applyAiEdit() {
+  async function sendAiMessage() {
+    const text = aiPrompt.trim();
+    if (!text || aiBusy) return;
+    setMessages((m) => [...m, { role: "user", text }]);
+    setAiPrompt("");
     setAiBusy(true);
-    setAiError(null);
     try {
       const res = await fetch("/api/generate-portal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ brief: aiPrompt, base: schema }),
+        body: JSON.stringify({ brief: text, base: schema }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setAiError(
-          data.error === "generator_not_configured"
-            ? "Не задан OPENAI_API_KEY."
-            : `Ошибка: ${data.error ?? res.status}`,
-        );
+        const reason =
+          typeof data.message === "string" && data.message
+            ? data.message
+            : "Не получилось применить правку. Попробуйте ещё раз.";
+        setMessages((m) => [...m, { role: "assistant", text: reason }]);
         return;
       }
       // применяем в локальное состояние — пользователь увидит и решит, сохранять
       setSchema(data.schema as PortalSchema);
       setSaved(false);
-      setAiPrompt("");
+      setMessages((m) => [
+        ...m,
+        {
+          role: "assistant",
+          text: data.message || "Готово — применил правку. Проверьте ниже и нажмите «Сохранить».",
+        },
+      ]);
     } catch {
-      setAiError("Сеть недоступна.");
+      setMessages((m) => [...m, { role: "assistant", text: "Сеть недоступна, попробуйте ещё раз." }]);
     } finally {
       setAiBusy(false);
     }
@@ -633,30 +822,62 @@ export function PortalEditor({ initial }: { initial: PortalSchema }) {
       <h1 className="mt-6 text-3xl font-semibold tracking-tight">{schema.name}</h1>
       <p className="mt-1 text-sm text-paper/50">/{schema.slug}</p>
 
-      {/* AI-правка */}
-      <section className="mt-8 rounded-xl border border-gold/30 bg-ink-soft p-5">
-        <h2 className="text-base font-semibold">Изменить портал текстом</h2>
+      {/* AI-чат: правка портала текстом с фидбеком */}
+      <section className="mt-8 border border-ink-line/60 bg-ink-soft p-5">
+        <h2 className="text-base font-semibold">Изменить с ИИ</h2>
         <p className="mt-1 text-sm text-paper/50">
-          Опишите правку — ИИ обновит структуру/тему/тексты. Изменения появятся ниже, сохраните, если
-          подходят.
+          Опишите правку — ИИ применит её и расскажет, что изменил. Изменения появятся ниже; нажмите
+          «Сохранить», если подходят.
         </p>
-        <textarea
-          value={aiPrompt}
-          onChange={(e) => setAiPrompt(e.target.value)}
-          rows={2}
-          placeholder="Напр.: сделай тёмно-зелёную тему, добавь блок FAQ и убери 3D-карту"
-          className={`mt-3 ${inputCls}`}
-        />
-        <div className="mt-3 flex items-center gap-4">
+
+        {messages.length > 0 && (
+          <div className="mt-4 max-h-80 space-y-2 overflow-y-auto">
+            {messages.map((m, i) => (
+              <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
+                <div
+                  className={
+                    m.role === "user"
+                      ? "max-w-[85%] whitespace-pre-wrap border border-ink-line bg-ink px-3 py-2 text-sm text-paper"
+                      : "max-w-[85%] whitespace-pre-wrap border border-ink-line/60 bg-paper px-3 py-2 text-sm text-ink"
+                  }
+                >
+                  {m.text}
+                </div>
+              </div>
+            ))}
+            {aiBusy && (
+              <div className="flex justify-start">
+                <div className="border border-ink-line/60 bg-paper px-3 py-2 text-sm text-ink/60">
+                  ИИ думает…
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="mt-3 flex items-end gap-2">
+          <textarea
+            value={aiPrompt}
+            onChange={(e) => setAiPrompt(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                sendAiMessage();
+              }
+            }}
+            rows={2}
+            placeholder="Напр.: сделай тёмно-зелёную тему, добавь блок FAQ и убери 3D-карту"
+            className={`flex-1 ${inputCls}`}
+          />
           <button
-            onClick={applyAiEdit}
+            onClick={sendAiMessage}
             disabled={aiBusy || !aiPrompt.trim()}
-            className="rounded-md border border-gold px-4 py-2 text-sm font-medium text-gold hover:bg-gold hover:text-ink disabled:opacity-40"
+            className="border border-gold bg-gold px-4 py-2 text-sm font-medium text-ink hover:bg-gold-deep disabled:opacity-40"
           >
-            {aiBusy ? "Применяю…" : "Применить правку"}
+            {aiBusy ? "…" : "Отправить"}
           </button>
-          {aiError && <span className="text-sm text-red-400">{aiError}</span>}
         </div>
+        <p className="mt-1.5 text-[11px] text-paper/40">Enter — отправить, Shift+Enter — перенос строки.</p>
       </section>
 
       {/* Тема */}
@@ -816,13 +1037,24 @@ export function PortalEditor({ initial }: { initial: PortalSchema }) {
                   </div>
                 </div>
 
-                {/* Цвета 3D-карты (наследуются из темы или свои) */}
+                {/* Цвета и камера 3D-карты */}
                 {b.type === "city3d" && (
-                  <MapColorsEditor
-                    colors={(b.props.colors as Record<string, string>) ?? null}
-                    theme={schema.theme}
-                    onChange={(v) => setBlockProp(b.id, "colors", v)}
-                  />
+                  <>
+                    <MapColorsEditor
+                      colors={(b.props.colors as Record<string, string>) ?? null}
+                      theme={schema.theme}
+                      onChange={(v) => setBlockProp(b.id, "colors", v)}
+                    />
+                    <CameraEditor
+                      camera={(b.props.camera as Record<string, unknown>) ?? null}
+                      onChange={(v) => setBlockProp(b.id, "camera", v)}
+                    />
+                  </>
+                )}
+
+                {/* Источник данных + вид + маппинг полей */}
+                {b.type === "data" && (
+                  <DataBlockEditor props={b.props} setMany={(patch) => setBlockProps(b.id, patch)} />
                 )}
 
                 {/* Редактируемые поля блока */}
