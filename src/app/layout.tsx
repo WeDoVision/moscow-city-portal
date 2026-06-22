@@ -1,5 +1,14 @@
 import type { Metadata } from "next";
-import { Manrope, Prata, Playfair_Display, Cormorant } from "next/font/google";
+import {
+  Manrope,
+  Prata,
+  Playfair_Display,
+  Cormorant,
+  Inter,
+  Montserrat,
+  Golos_Text,
+  Lora,
+} from "next/font/google";
 import Script from "next/script";
 import { portal } from "@/portal.config";
 import "./globals.css";
@@ -34,6 +43,26 @@ const cormorant = Cormorant({
   variable: "--font-cormorant",
 });
 
+const inter = Inter({
+  subsets: ["latin", "cyrillic"],
+  variable: "--font-inter",
+});
+
+const montserrat = Montserrat({
+  subsets: ["latin", "cyrillic"],
+  variable: "--font-montserrat",
+});
+
+const golos = Golos_Text({
+  subsets: ["latin", "cyrillic"],
+  variable: "--font-golos",
+});
+
+const lora = Lora({
+  subsets: ["latin", "cyrillic"],
+  variable: "--font-lora",
+});
+
 export const metadata: Metadata = {
   metadataBase: new URL(portal.siteUrl),
   title: {
@@ -52,7 +81,7 @@ export default function RootLayout({
   return (
     <html
       lang="ru"
-      className={`${manrope.variable} ${prata.variable} ${playfair.variable} ${cormorant.variable}`}
+      className={`${manrope.variable} ${prata.variable} ${playfair.variable} ${cormorant.variable} ${inter.variable} ${montserrat.variable} ${golos.variable} ${lora.variable}`}
     >
       <body>
         {children}

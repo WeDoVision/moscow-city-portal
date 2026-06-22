@@ -40,6 +40,13 @@ function sanitizeTheme(input: unknown): Theme {
     goldDeep: asString(t.goldDeep, DEFAULT_THEME.goldDeep),
     muted: asString(t.muted, DEFAULT_THEME.muted),
     radius: asString(t.radius, DEFAULT_THEME.radius),
+    // шрифт: ключ из набора ИЛИ произвольное имя семейства (грузится fontUrl)
+    ...(asString(t.fontDisplay).trim() ? { fontDisplay: asString(t.fontDisplay).trim().slice(0, 60) } : {}),
+    ...(asString(t.fontBody).trim() ? { fontBody: asString(t.fontBody).trim().slice(0, 60) } : {}),
+    // ссылка на шрифты — только https (иначе игнорируем)
+    ...(/^https:\/\/\S+$/i.test(asString(t.fontUrl).trim())
+      ? { fontUrl: asString(t.fontUrl).trim().slice(0, 300) }
+      : {}),
   };
 }
 
@@ -61,10 +68,12 @@ function sanitizeBlocks(input: unknown): Block[] {
     .filter((b) => b && typeof b === "object" && isBlockType((b as Block).type))
     .map((b, i) => {
       const block = b as Block;
+      const css = asString(block.css).trim();
       return {
         id: asString(block.id, `${block.type}-${i}`),
         type: block.type,
         enabled: block.enabled !== false,
+        ...(css ? { css } : {}),
         // пропсы оставляем как есть — блок сам берёт только знакомые поля
         props: (block.props && typeof block.props === "object" ? block.props : {}) as Record<
           string,

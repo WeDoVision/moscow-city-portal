@@ -119,6 +119,22 @@ export function buildFilters(q: CatalogQuery): string {
   if (q.areaMin != null || q.areaMax != null) {
     rules.push(`area_m2/int_band_filter|${q.areaMin ?? ""}:${q.areaMax ?? ""}`);
   }
+  // отделка — только жилой сегмент (у офисов/ритейла её нет)
+  if (segmentOf(q.category) === "residential" && q.decoration?.length) {
+    rules.push(`decoration/str_multiple_filter|${q.decoration.join(",")}`);
+  }
+  // этаж
+  if (q.floorMin != null || q.floorMax != null) {
+    rules.push(`floor/int_band_filter|${q.floorMin ?? ""}:${q.floorMax ?? ""}`);
+  }
+  // новостройка/вторичка, готовность, год сдачи, застройщик, особенности комплекса
+  if (q.isSecondary != null) rules.push(`is_secondary/bool_filter|${q.isSecondary ? 1 : 0}`);
+  if (q.isBuilt != null) rules.push(`is_built/bool_filter|${q.isBuilt ? 1 : 0}`);
+  if (q.readinessYear?.length) {
+    rules.push(`readiness_year/int_multiple_filter|${q.readinessYear.join(":")}`);
+  }
+  if (q.developer?.length) rules.push(`developer/custom|${q.developer.join(":")}`);
+  if (q.complexOption?.length) rules.push(`complex_option/custom|${q.complexOption.join(":")}`);
   rules.push(`sorting/custom|${sortValue(q.sort, deal)}`);
   return rules.join(";");
 }

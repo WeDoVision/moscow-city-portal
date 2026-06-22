@@ -50,45 +50,35 @@
       }
     },
     {
-      "id": "heroOverlayTuning",
-      "type": "custom",
-      "enabled": true,
-      "props": {
-        "title": " ",
-        "padding": "none",
-        "background": "radial-gradient(900px 520px at 14% 22%, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0.14) 38%, rgba(255,255,255,0.00) 70%)",
-        "elements": [
-          {
-            "kind": "html",
-            "html": "<div style=\"height:1px\"></div>"
-          }
-        ]
-      }
-    },
-    {
       "id": "city3d",
       "type": "city3d",
       "enabled": true,
       "props": {
-        "title": "Москва-Сити в 3D"
+        "title": "Москва-Сити в 3D",
+        "camera": {
+          "autoRotate": false
+        }
       }
     },
     {
       "id": "towers",
-      "type": "towers",
+      "type": "data",
       "enabled": true,
       "props": {
-        "title": "Башни"
+        "title": "Башни Москва-Сити",
+        "subtitle": "Листайте кольцо — в центре в фокусе",
+        "source": "complexes",
+        "view": "ring",
+        "limit": 7
       }
     },
     {
       "id": "lots",
-      "type": "lotsGrid",
+      "type": "catalog",
       "enabled": true,
       "props": {
         "title": "Актуальные объекты",
-        "subtitle": "Свежие лоты из базы whitewill",
-        "limit": 9
+        "subtitle": "Свежие лоты из базы whitewill"
       }
     },
     {

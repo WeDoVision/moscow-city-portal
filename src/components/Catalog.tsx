@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { portal } from "@/portal.config";
 import {
   CATEGORIES,
+  COMPLEX_OPTIONS,
+  DECORATION_OPTIONS,
   type CatalogCounts,
   type CatalogQuery,
   type LotFilterResult,
@@ -39,7 +41,21 @@ function fmtMln(n: number | undefined): string {
  * Набор фильтров повторяет старый портал: сделка, категория (со счётчиками),
  * башня (со счётчиками), цена, площадь + спальни/сортировка как на whitewill.
  */
-export function Catalog({ initial }: { initial: LotFilterResult }) {
+export function Catalog({
+  initial,
+  basePath = "/",
+  towers,
+  portalSlug,
+}: {
+  initial: LotFilterResult;
+  /** куда синкать URL фильтров (по умолчанию корень эталонного сайта) */
+  basePath?: string;
+  /** список башен для фильтра (по умолчанию башни эталонного Москва-Сити) */
+  towers?: { id: number; name: string }[];
+  /** slug портала — карточки лотов получат ?portal=<slug> для наследования темы */
+  portalSlug?: string;
+}) {
+  const towerList = towers ?? portal.towers;
   const router = useRouter();
   const searchParams = useSearchParams();
   const [query, setQuery] = useState<CatalogQuery>(() => parseCatalogQuery(searchParams));
@@ -51,6 +67,10 @@ export function Catalog({ initial }: { initial: LotFilterResult }) {
   const [areaDraft, setAreaDraft] = useState({
     min: query.areaMin?.toString() ?? "",
     max: query.areaMax?.toString() ?? "",
+  });
+  const [floorDraft, setFloorDraft] = useState({
+    min: query.floorMin?.toString() ?? "",
+    max: query.floorMax?.toString() ?? "",
   });
   const firstRender = useRef(true);
   const abortRef = useRef<AbortController | null>(null);
@@ -88,7 +108,7 @@ export function Catalog({ initial }: { initial: LotFilterResult }) {
       if ([...searchParams.keys()].length === 0) return;
     }
     const params = catalogQueryToParams(query);
-    router.replace(`/?${params}#catalog`, { scroll: false });
+    router.replace(`${basePath}?${params}#catalog`, { scroll: false });
     track("filter_change", {
       deal: query.deal,
       category: query.category ?? "all",
@@ -156,6 +176,31 @@ export function Catalog({ initial }: { initial: LotFilterResult }) {
     apply({ areaMin: int(areaDraft.min), areaMax: int(areaDraft.max) });
   };
 
+  const commitFloor = () => {
+    const int = (s: string) => {
+      const n = parseInt(s, 10);
+      return Number.isNaN(n) ? undefined : n;
+    };
+    apply({ floorMin: int(floorDraft.min), floorMax: int(floorDraft.max) });
+  };
+
+  const toggleDecoration = (v: string) => {
+    const cur = new Set(query.decoration ?? []);
+    if (cur.has(v)) cur.delete(v);
+    else cur.add(v);
+    apply({ decoration: [...cur] });
+  };
+
+  const toggleOption = (v: number) => {
+    const cur = new Set(query.complexOption ?? []);
+    if (cur.has(v)) cur.delete(v);
+    else cur.add(v);
+    apply({ complexOption: [...cur] });
+  };
+  /** тумблер «значение ↔ выкл» для tri-state булевых фильтров */
+  const setTri = (key: "isSecondary" | "isBuilt", v: boolean) =>
+    apply({ [key]: query[key] === v ? undefined : v } as Partial<CatalogQuery>);
+
   const isResidential = !query.category || query.category === "flat" || query.category === "apartment";
 
   const hasFilters = useMemo(
@@ -168,6 +213,9 @@ export function Catalog({ initial }: { initial: LotFilterResult }) {
           query.priceMax != null ||
           query.areaMin != null ||
           query.areaMax != null ||
+          query.decoration?.length ||
+          query.floorMin != null ||
+          query.floorMax != null ||
           query.deal === "rent" ||
           query.sort,
       ),
@@ -180,6 +228,7 @@ export function Catalog({ initial }: { initial: LotFilterResult }) {
   const resetAll = () => {
     setPriceDraft({ min: "", max: "" });
     setAreaDraft({ min: "", max: "" });
+    setFloorDraft({ min: "", max: "" });
     setQuery({ deal: "sale", page: 1 });
   };
 
@@ -249,7 +298,7 @@ export function Catalog({ initial }: { initial: LotFilterResult }) {
 
         {/* башни со счётчиками */}
         <div className="no-scrollbar mt-4 flex gap-2 overflow-x-auto" role="group" aria-label="Башни">
-          {portal.towers.map((t) => (
+          {towerList.map((t) => (
             <button
               key={t.id}
               onClick={() => toggleTower(t.id)}
@@ -318,6 +367,31 @@ export function Catalog({ initial }: { initial: LotFilterResult }) {
             />
           </div>
 
+          <div className="flex items-center gap-2 rounded-full border border-ink-line/60 px-4 py-1.5">
+            <span className="text-xs text-muted">Этаж</span>
+            <input
+              inputMode="numeric"
+              placeholder="от"
+              value={floorDraft.min}
+              onChange={(e) => setFloorDraft((p) => ({ ...p, min: e.target.value }))}
+              onBlur={commitFloor}
+              onKeyDown={(e) => e.key === "Enter" && commitFloor()}
+              className="w-12 bg-transparent text-sm text-paper placeholder:text-muted/60 focus:outline-none"
+              aria-label="Этаж от"
+            />
+            <span className="text-muted">—</span>
+            <input
+              inputMode="numeric"
+              placeholder="до"
+              value={floorDraft.max}
+              onChange={(e) => setFloorDraft((p) => ({ ...p, max: e.target.value }))}
+              onBlur={commitFloor}
+              onKeyDown={(e) => e.key === "Enter" && commitFloor()}
+              className="w-12 bg-transparent text-sm text-paper placeholder:text-muted/60 focus:outline-none"
+              aria-label="Этаж до"
+            />
+          </div>
+
           {isResidential && (
             <div className="flex items-center gap-1 rounded-full border border-ink-line/60 p-1" role="group" aria-label="Спальни">
               <span className="pl-3 pr-1 text-xs text-muted">Спальни</span>
@@ -337,6 +411,45 @@ export function Catalog({ initial }: { initial: LotFilterResult }) {
               ))}
             </div>
           )}
+
+          {isResidential && (
+            <div className="no-scrollbar flex gap-2 overflow-x-auto" role="group" aria-label="Отделка">
+              {DECORATION_OPTIONS.map((d) => (
+                <button
+                  key={d.value}
+                  onClick={() => toggleDecoration(d.value)}
+                  aria-pressed={query.decoration?.includes(d.value) ?? false}
+                  className={`shrink-0 rounded-full border px-4 py-1.5 text-sm transition-colors ${
+                    query.decoration?.includes(d.value)
+                      ? "border-gold bg-gold/15 text-gold"
+                      : "border-ink-line/60 text-paper/70 hover:border-paper/40 hover:text-paper"
+                  }`}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* новостройка/вторичка + готовность */}
+          <div className="flex items-center gap-1 rounded-full border border-ink-line/60 p-1" role="group" aria-label="Тип и готовность">
+            {([
+              ["isSecondary", false, "Новостройка"],
+              ["isSecondary", true, "Вторичка"],
+              ["isBuilt", true, "Сдан"],
+            ] as const).map(([key, val, label]) => (
+              <button
+                key={label}
+                onClick={() => setTri(key, val)}
+                aria-pressed={query[key] === val}
+                className={`rounded-full px-3 py-1.5 text-sm transition-colors ${
+                  query[key] === val ? "bg-gold text-ink" : "text-paper/70 hover:text-paper"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
 
           <select
             value={query.sort ?? "price_asc"}
@@ -360,6 +473,26 @@ export function Catalog({ initial }: { initial: LotFilterResult }) {
             </button>
           )}
         </div>
+
+        {/* особенности комплекса (инфраструктура) */}
+        {isResidential && (
+          <div className="no-scrollbar mt-3 flex gap-2 overflow-x-auto" role="group" aria-label="Особенности комплекса">
+            {COMPLEX_OPTIONS.map((o) => (
+              <button
+                key={o.value}
+                onClick={() => toggleOption(o.value)}
+                aria-pressed={query.complexOption?.includes(o.value) ?? false}
+                className={`shrink-0 rounded-full border px-3 py-1 text-xs transition-colors ${
+                  query.complexOption?.includes(o.value)
+                    ? "border-gold bg-gold/15 text-gold"
+                    : "border-ink-line/60 text-paper/70 hover:border-paper/40 hover:text-paper"
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── Результаты ──────────────────────────────────────────────── */}
@@ -375,7 +508,7 @@ export function Catalog({ initial }: { initial: LotFilterResult }) {
         }`}
       >
         {lots.map((lot) => (
-          <LotCard key={`${lot.id}-${lot.domainEntity}`} lot={lot} />
+          <LotCard key={`${lot.id}-${lot.domainEntity}`} lot={lot} portalSlug={portalSlug} />
         ))}
       </div>
 

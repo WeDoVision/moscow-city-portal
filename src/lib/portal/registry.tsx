@@ -13,9 +13,11 @@ import type { BlockType } from "./schema";
 import { BLOCK_META, type BlockMeta } from "./blocks-meta";
 import {
   AboutBlock,
+  CatalogBlock,
   City3DBlock,
   CtaBlock,
   CustomBlock,
+  DataBlock,
   FaqBlock,
   HeroBlock,
   LotsGridBlock,
@@ -30,6 +32,8 @@ const COMPONENTS: Record<BlockType, ComponentType<BlockProps>> = {
   city3d: City3DBlock,
   towers: TowersBlock,
   lotsGrid: LotsGridBlock,
+  data: DataBlock,
+  catalog: CatalogBlock,
   about: AboutBlock,
   faq: FaqBlock,
   cta: CtaBlock,

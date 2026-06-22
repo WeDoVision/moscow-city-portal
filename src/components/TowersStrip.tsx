@@ -5,8 +5,17 @@ import { imageUrl } from "@/lib/whitewill/client";
 import { Reveal } from "./Reveal";
 
 /** Горизонтальная лента башен с фото из API комплексов */
-export function TowersStrip({ complexes }: { complexes: ComplexCard[] }) {
+export function TowersStrip({
+  complexes,
+  portalSlug,
+}: {
+  complexes: ComplexCard[];
+  portalSlug?: string;
+}) {
   const byId = new Map(complexes.map((c) => [c.id, c]));
+  // в портале ведём на портальный маршрут башни (тема — из маршрута)
+  const towerHref = (slug: string) =>
+    portalSlug ? `/p/${portalSlug}/towers/${slug}` : `/towers/${slug}`;
 
   return (
     <section className="py-20 md:py-28" aria-labelledby="towers-title">
@@ -31,7 +40,7 @@ export function TowersStrip({ complexes }: { complexes: ComplexCard[] }) {
           return (
             <Reveal key={t.id} delay={i * 60} className="shrink-0">
               <Link
-                href={`/towers/${t.slug}`}
+                href={towerHref(t.slug)}
                 className="group relative block h-[420px] w-[300px] overflow-hidden rounded-sm border border-ink-line/40"
               >
                 {img ? (

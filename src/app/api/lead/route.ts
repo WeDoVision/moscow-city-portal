@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { fail } from "@/lib/portal/ai-errors";
 
 /**
  * Приём заявок (обратный звонок / консультация по лоту).
@@ -11,11 +12,11 @@ export async function POST(req: NextRequest) {
   try {
     data = await req.json();
   } catch {
-    return NextResponse.json({ error: "bad_json" }, { status: 400 });
+    return fail("bad_request", "Не удалось прочитать заявку. Обновите страницу и попробуйте снова.", 400);
   }
   const phone = (data.phone ?? "").replace(/[^\d+]/g, "");
   if (phone.length < 10) {
-    return NextResponse.json({ error: "bad_phone" }, { status: 422 });
+    return fail("bad_phone", "Похоже, номер телефона указан не полностью. Проверьте и попробуйте снова.", 422);
   }
   console.log("[lead]", JSON.stringify({ ...data, phone, ts: Date.now() }));
   return NextResponse.json({ ok: true });

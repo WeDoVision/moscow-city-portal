@@ -15,6 +15,7 @@ export type FieldSpec = {
     | "text"
     | "textarea"
     | "number"
+    | "select" // выбор из вариантов (кнопки) — токен, понятный и человеку, и ИИ
     | "json"
     | "stringList" // список строк (напр. абзацы)
     | "objectList" // список объектов с под-полями (item)
@@ -23,6 +24,8 @@ export type FieldSpec = {
   hint?: string;
   /** под-поля для objectList */
   item?: { key: string; label: string; kind: "text" | "textarea" }[];
+  /** варианты для kind: "select" (value пишется в схему, label видит человек) */
+  options?: { value: string; label: string }[];
 };
 
 export type BlockMeta = {
@@ -66,6 +69,27 @@ export const BLOCK_META: Record<BlockType, BlockMeta> = {
       { key: "title", label: "Заголовок", kind: "text" },
       { key: "subtitle", label: "Подзаголовок", kind: "text" },
       { key: "limit", label: "Сколько карточек", kind: "number" },
+    ],
+  },
+  data: {
+    label: "Данные (источник + вид)",
+    fields: [
+      { key: "title", label: "Заголовок", kind: "text" },
+      { key: "subtitle", label: "Подзаголовок", kind: "text" },
+      {
+        key: "limit",
+        label: "Сколько показать",
+        kind: "number",
+        hint: "0 — все. Для вида «Один объект» берётся первый.",
+      },
+    ],
+  },
+  catalog: {
+    label: "Каталог с поиском и фильтрами",
+    heavy: true,
+    fields: [
+      { key: "title", label: "Заголовок", kind: "text" },
+      { key: "subtitle", label: "Подзаголовок", kind: "text" },
     ],
   },
   about: {
@@ -113,7 +137,26 @@ export const BLOCK_META: Record<BlockType, BlockMeta> = {
     fields: [
       { key: "title", label: "Заголовок секции", kind: "text" },
       { key: "subtitle", label: "Подзаголовок", kind: "textarea" },
-      { key: "background", label: "Фон секции (CSS, необязательно)", kind: "text" },
+      {
+        key: "background",
+        label: "Фон секции",
+        kind: "select",
+        options: [
+          { value: "", label: "Прозрачный" },
+          { value: "soft", label: "Мягкий" },
+          { value: "ink", label: "Тёмный" },
+          { value: "accent", label: "Акцент" },
+        ],
+      },
+      {
+        key: "padding",
+        label: "Отступы сверху/снизу",
+        kind: "select",
+        options: [
+          { value: "", label: "С отступами" },
+          { value: "none", label: "Без отступов" },
+        ],
+      },
       { key: "elements", label: "Содержимое секции", kind: "elements" },
     ],
   },

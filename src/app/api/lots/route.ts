@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchLots } from "@/lib/whitewill/client";
 import { parseCatalogQuery } from "@/lib/whitewill/query";
+import { fail } from "@/lib/portal/ai-errors";
 
 /** Прокси каталога для клиентской фильтрации (whitewill API не отдаёт CORS) */
 export async function GET(req: NextRequest) {
@@ -14,6 +15,11 @@ export async function GET(req: NextRequest) {
     });
   } catch (e) {
     console.error("[api/lots]", e);
-    return NextResponse.json({ error: "upstream_error" }, { status: 502 });
+    return fail(
+      "upstream_error",
+      "Не удалось загрузить объекты из API Whitewill. Попробуйте обновить позже.",
+      502,
+      e instanceof Error ? `${e.name}: ${e.message}` : String(e),
+    );
   }
 }

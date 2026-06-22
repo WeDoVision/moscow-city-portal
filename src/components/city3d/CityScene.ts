@@ -21,6 +21,16 @@ export type CityBuilding = {
 export type TowerAnchor = { id: number; x: number; y: number; z: number };
 
 /** Цвета сцены, приходят из темы портала (любой CSS-формат). */
+/** Параметры камеры карты (настраиваются из админки/ИИ). */
+export type MapView = {
+  /** горизонтальный угол (поворот) в радианах */
+  azimuth?: number;
+  /** вертикальный угол/удаление 0..1 (0 — низко/близко, 1 — высоко/далеко) */
+  elevation?: number;
+  /** медленный автоповорот камеры */
+  autoRotate?: boolean;
+};
+
 export type MapColors = {
   /** фон/туман/земля — фон портала */
   background?: string;
@@ -78,12 +88,22 @@ export class CityScene {
   private accentColor: THREE.Color;
   private accentDeepColor: THREE.Color;
 
+  /** скорость автоповорота (рад/кадр); 0 — выключен */
+  private autoRotate = 0;
+
   constructor(
     canvas: HTMLCanvasElement,
     buildings: CityBuilding[],
     private onPick: (towerId: number | null) => void,
     colors: MapColors = {},
+    view: MapView = {},
   ) {
+    if (typeof view.azimuth === "number") this.azimuth = view.azimuth;
+    if (typeof view.elevation === "number") {
+      this.elevation = Math.max(0, Math.min(view.elevation, 1));
+    }
+    if (view.autoRotate) this.autoRotate = 0.0012;
+
     const bg = new THREE.Color(cssToHex(colors.background, "#0e1015"));
     this.cityColor = new THREE.Color(cssToHex(colors.building, "#14161d"));
     this.towerColor = new THREE.Color(cssToHex(colors.tower, "#232838"));
@@ -205,6 +225,11 @@ export class CityScene {
     this.camera.updateProjectionMatrix();
   }
 
+  /** курсор ушёл с карты — уводим точку прицела за кадр, чтобы hover/курсор не «залипали» */
+  clearHover() {
+    this.pointer.set(2, 2); // вне NDC [-1,1] → raycaster ничего не находит
+  }
+
   setPointer(xNdc: number, yNdc: number) {
     this.pointer.set(xNdc, yNdc);
   }
@@ -246,6 +271,8 @@ export class CityScene {
     if (this.disposed) return;
     this.frame = requestAnimationFrame(this.animate);
 
+    if (this.autoRotate) this.azimuth += this.autoRotate;
+
     const radius = 350 + this.elevation * 900; // 350..1250
     const height = 120 + this.elevation * 700; // 120..820
     const time = performance.now() / 1000;
@@ -257,11 +284,12 @@ export class CityScene {
     );
     this.camera.lookAt(this.center);
 
-    // hover-подсветка
+    // hover-подсветка; курсор меняем ТОЛЬКО на канвасе (не на всём body),
+    // иначе pointer «залипает» на всей странице
     const hoverId = this.pick();
     if (hoverId !== this.hovered) {
       this.hovered = hoverId;
-      document.body.style.cursor = hoverId ? "pointer" : "";
+      this.renderer.domElement.style.cursor = hoverId ? "pointer" : "";
     }
     for (const [tid, mesh] of this.towers) {
       const mat = mesh.material as THREE.MeshStandardMaterial;

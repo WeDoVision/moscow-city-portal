@@ -3,13 +3,13 @@
 import { useState } from "react";
 import { portal } from "@/portal.config";
 import { track } from "@/lib/analytics";
-import type { CatalogQuery } from "@/lib/whitewill/types";
+import { COMPLEX_OPTIONS, DEVELOPERS, type CatalogQuery } from "@/lib/whitewill/types";
 
 const SUGGESTIONS = [
-  "Однушка до 60 млн",
-  "Апартаменты с 2 спальнями в ОКО",
-  "Пентхаус, бюджет до 500 млн",
-  "Офис в аренду до 200 м²",
+  "Однушка до 60 млн с отделкой",
+  "Видовая квартира на высоком этаже",
+  "Без отделки под свой ремонт в ОКО",
+  "Что-нибудь на нижних этажах",
 ];
 
 const CAT_LABELS: Record<string, string> = {
@@ -24,6 +24,11 @@ const ROOM_LABELS: Record<string, string> = {
   "2": "2 сп.",
   "3": "3 сп.",
   "4+": "4+ сп.",
+};
+const DECOR_LABELS: Record<string, string> = {
+  with_decoration: "С отделкой",
+  without_decoration: "Без отделки",
+  whitebox: "White box",
 };
 
 function buildChips(f: Partial<CatalogQuery>): string[] {
@@ -44,6 +49,23 @@ function buildChips(f: Partial<CatalogQuery>): string[] {
   const areaMin = f.areaMin != null ? `от ${f.areaMin} м²` : "";
   const areaMax = f.areaMax != null ? `до ${f.areaMax} м²` : "";
   if (areaMin || areaMax) chips.push([areaMin, areaMax].filter(Boolean).join(" "));
+  if (f.decoration?.length) chips.push(f.decoration.map((d) => DECOR_LABELS[d] ?? d).join(", "));
+  const floorMin = f.floorMin != null ? `этаж от ${f.floorMin}` : "";
+  const floorMax = f.floorMax != null ? `до ${f.floorMax}` : "";
+  if (floorMin || floorMax) chips.push([floorMin, floorMax].filter(Boolean).join(" "));
+  if (f.isSecondary != null) chips.push(f.isSecondary ? "Вторичка" : "Новостройка");
+  if (f.isBuilt != null) chips.push(f.isBuilt ? "Сдан" : "Строится");
+  if (f.readinessYear?.length) chips.push(`Сдача: ${f.readinessYear.join(", ")}`);
+  if (f.developer?.length) {
+    chips.push(
+      f.developer.map((id) => DEVELOPERS.find((d) => d.value === id)?.label ?? id).join(", "),
+    );
+  }
+  if (f.complexOption?.length) {
+    chips.push(
+      f.complexOption.map((id) => COMPLEX_OPTIONS.find((o) => o.value === id)?.label ?? id).join(", "),
+    );
+  }
   return chips;
 }
 

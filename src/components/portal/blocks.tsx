@@ -10,14 +10,27 @@
 
 import type { ReactNode } from "react";
 import type { PortalSchema } from "@/lib/portal/schema";
-import type { ComplexCard, LotCard as LotCardType } from "@/lib/whitewill/types";
+import type { ComplexCard, LotCard as LotCardType, LotFilterResult } from "@/lib/whitewill/types";
 import { LotCard } from "@/components/LotCard";
 import { TowersStrip } from "@/components/TowersStrip";
+import { Catalog } from "@/components/Catalog";
+import { towerById } from "@/portal.config";
 import { CityMap3D } from "@/components/city3d/CityMap3D";
+import { DataView, sortItems, toItems } from "@/components/portal/views";
+import { FaqAccordion } from "@/components/portal/FaqAccordion";
+import {
+  isSourceId,
+  isViewId,
+  resolveFields,
+  type SourceId,
+  type ViewId,
+} from "@/lib/portal/sources";
 
 export type PortalData = {
   lots: LotCardType[];
   complexes: ComplexCard[];
+  /** полный результат фетча лотов — для интерактивного блока `catalog` */
+  lotsResult: LotFilterResult;
 };
 
 export type BlockProps = {
@@ -28,6 +41,10 @@ export type BlockProps = {
 
 const str = (v: unknown, fallback = ""): string => (typeof v === "string" ? v : fallback);
 const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+
+/** Префиксует внутренние ссылки порталом (/lots/1 → /p/<slug>/lots/1), чтобы вложенная страница взяла тему из маршрута. */
+const withPortal = (href: string, slug: string): string =>
+  href.startsWith("/") ? `/p/${slug}${href}` : href;
 
 /** Hero — первый экран. */
 export function HeroBlock({ props, schema }: BlockProps) {
@@ -84,6 +101,13 @@ export function City3DBlock({ props, data, schema }: BlockProps) {
   const t = schema.theme;
   // по умолчанию цвета карты наследуются из темы; props.colors их перекрывает
   const c = (props.colors ?? {}) as Record<string, string | undefined>;
+  // параметры камеры (угол/удаление/автоповорот) — опционально из props.camera
+  const cam = (props.camera ?? {}) as Record<string, unknown>;
+  const view = {
+    azimuth: typeof cam.azimuth === "number" ? cam.azimuth : undefined,
+    elevation: typeof cam.elevation === "number" ? cam.elevation : undefined,
+    autoRotate: cam.autoRotate === true,
+  };
   return (
     <CityMap3D
       complexes={data.complexes}
@@ -94,24 +118,25 @@ export function City3DBlock({ props, data, schema }: BlockProps) {
         accent: c.accent || t.gold,
         accentDeep: c.accentDeep || t.goldDeep,
       }}
+      view={view}
     />
   );
 }
 
 /** Полоса башен/ЖК. */
-export function TowersBlock({ props, data }: BlockProps) {
+export function TowersBlock({ props, schema, data }: BlockProps) {
   return (
     <section className="mx-auto max-w-6xl px-6 py-20">
       {str(props.title) && (
         <h2 className="mb-8 font-display text-3xl text-paper">{str(props.title)}</h2>
       )}
-      <TowersStrip complexes={data.complexes} />
+      <TowersStrip complexes={data.complexes} portalSlug={schema.slug} />
     </section>
   );
 }
 
 /** Сетка объектов — ядро любого портала. */
-export function LotsGridBlock({ props, data }: BlockProps) {
+export function LotsGridBlock({ props, schema, data }: BlockProps) {
   const limit = typeof props.limit === "number" ? props.limit : 9;
   const lots = data.lots.slice(0, limit);
   return (
@@ -122,7 +147,7 @@ export function LotsGridBlock({ props, data }: BlockProps) {
       {str(props.subtitle) && <p className="mt-2 text-muted">{str(props.subtitle)}</p>}
       <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {lots.length ? (
-          lots.map((lot) => <LotCard key={lot.id} lot={lot} />)
+          lots.map((lot) => <LotCard key={lot.id} lot={lot} portalSlug={schema.slug} />)
         ) : (
           <p className="text-muted">Объекты загружаются…</p>
         )}
@@ -167,16 +192,7 @@ export function FaqBlock({ props }: BlockProps) {
   return (
     <section className="mx-auto max-w-4xl px-6 py-20">
       <h2 className="font-display text-3xl text-paper">{str(props.title, "Вопросы")}</h2>
-      <div className="mt-8 divide-y divide-ink-line/40">
-        {items.map((it, i) => (
-          <details key={i} className="group py-5">
-            <summary className="cursor-pointer list-none font-medium text-paper">
-              {str(it.q)}
-            </summary>
-            <p className="mt-3 text-muted">{str(it.a)}</p>
-          </details>
-        ))}
-      </div>
+      <FaqAccordion items={items} />
     </section>
   );
 }
@@ -203,6 +219,34 @@ function sanitizeHtml(html: string): string {
 const alignCls = (a: string) =>
   a === "center" ? "text-center" : a === "right" ? "text-right" : "text-left";
 
+/** Цвет текста — токен темы (а не произвольный CSS). `fallback` — цвет по умолчанию для элемента. */
+const colorCls = (c: string, fallback: string) =>
+  c === "accent"
+    ? "text-gold"
+    : c === "muted"
+      ? "text-muted"
+      : c === "paper"
+        ? "text-paper"
+        : fallback;
+
+/** Начертание текста — токены (жирность/курсив/капс), а не произвольный CSS. */
+function emphasisCls(el: Record<string, unknown>): string {
+  const w = str(el.weight);
+  const weight =
+    w === "bold"
+      ? "font-bold"
+      : w === "semibold"
+        ? "font-semibold"
+        : w === "medium"
+          ? "font-medium"
+          : w === "light"
+            ? "font-light"
+            : "";
+  return [weight, el.italic ? "italic" : "", el.uppercase ? "uppercase tracking-wide" : ""]
+    .filter(Boolean)
+    .join(" ");
+}
+
 /** Рендер одного примитива произвольной секции. */
 function renderEl(el: Record<string, unknown>, key: string | number, schema: PortalSchema): ReactNode {
   const kind = str(el.kind);
@@ -213,16 +257,41 @@ function renderEl(el: Record<string, unknown>, key: string | number, schema: Por
       const size = lvl <= 1 ? "text-4xl md:text-5xl" : lvl === 2 ? "text-3xl md:text-4xl" : "text-2xl";
       const Tag = `h${lvl}` as "h1" | "h2" | "h3" | "h4";
       return (
-        <Tag key={key} className={`font-display text-paper ${size} ${ac}`}>
+        <Tag
+          key={key}
+          className={`font-display ${colorCls(str(el.color), "text-paper")} ${emphasisCls(el)} ${size} ${ac}`}
+        >
           {str(el.text)}
         </Tag>
       );
     }
     case "text":
       return (
-        <p key={key} className={`max-w-3xl leading-relaxed text-muted ${ac}`}>
+        <p
+          key={key}
+          className={`max-w-3xl leading-relaxed ${colorCls(str(el.color), "text-muted")} ${emphasisCls(el)} ${ac}`}
+        >
           {str(el.text)}
         </p>
+      );
+    case "stat":
+      return (
+        <div key={key} className={ac}>
+          <div className="font-display text-4xl text-gold md:text-5xl">{str(el.value)}</div>
+          {str(el.label) && <div className="mt-2 text-sm text-muted">{str(el.label)}</div>}
+        </div>
+      );
+    case "quote":
+      return (
+        <blockquote
+          key={key}
+          className="border-l-2 border-gold pl-5 text-lg italic leading-relaxed text-paper/90"
+        >
+          {str(el.text)}
+          {str(el.author) && (
+            <footer className="mt-2 text-sm not-italic text-muted">— {str(el.author)}</footer>
+          )}
+        </blockquote>
       );
     case "image":
       return (
@@ -290,7 +359,13 @@ export function CustomBlock({ props, schema }: BlockProps) {
   const elements = arr(props.elements);
   const title = str(props.title);
   const subtitle = str(props.subtitle);
-  const background = str(props.background);
+  // фон секции — токен темы (а не произвольный CSS): понятно и человеку, и ИИ
+  const bgToken: Record<string, string> = {
+    soft: "var(--ink-soft)",
+    ink: "var(--ink)",
+    accent: "var(--gold)",
+  };
+  const background = bgToken[str(props.background)] ?? "";
   const padded = props.padding !== "none";
   return (
     <section
@@ -321,6 +396,59 @@ export function CtaBlock({ props, schema }: BlockProps) {
         >
           {str(props.buttonLabel, "Оставить заявку")}
         </a>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Данные (источник × вид) — универсальный блок «интеграции».
+ * Источник (лоты/комплексы) фетчится рендерером в `data`; здесь только выбор
+ * вида (карточки/список/таблица/карусель/один) и маппинг полей в слоты. Один
+ * источник можно показать как угодно — без правок кода.
+ */
+export function DataBlock({ props, schema, data }: BlockProps) {
+  const source: SourceId = isSourceId(props.source) ? props.source : "lots";
+  const view: ViewId = isViewId(props.view) ? props.view : "cards";
+  const fields = resolveFields(source, props.fields);
+  const columns = arr(props.columns).filter((c): c is string => typeof c === "string");
+  let items = sortItems(toItems(source, data), str(props.sort));
+  const limit = num(props.limit, view === "single" ? 1 : 9);
+  if (limit > 0) items = items.slice(0, limit);
+  // внутренние ссылки несут ?portal=<slug>, чтобы страница объекта унаследовала тему
+  items = items.map((it) => ({ ...it, href: withPortal(it.href, schema.slug) }));
+  return (
+    <section className="mx-auto max-w-6xl px-6 py-20">
+      {str(props.title) && <h2 className="font-display text-3xl text-paper">{str(props.title)}</h2>}
+      {str(props.subtitle) && <p className="mt-2 text-muted">{str(props.subtitle)}</p>}
+      <DataView view={view} items={items} source={source} fields={fields} columns={columns} />
+    </section>
+  );
+}
+
+/**
+ * Каталог с поиском и фильтрами (интерактивный). Переиспользует общий `Catalog`
+ * (умный поиск, фильтры, пагинация). Башни фильтра берутся из scope портала;
+ * ссылки на лоты несут ?portal=<slug>, чтобы страница лота унаследовала тему.
+ */
+export function CatalogBlock({ props, schema, data }: BlockProps) {
+  const towers = (schema.scope.towers ?? [])
+    .map((id) => {
+      const t = towerById.get(id);
+      return t ? { id, name: t.name } : null;
+    })
+    .filter((t): t is { id: number; name: string } => t !== null);
+  return (
+    <section id="catalog" className="mx-auto max-w-6xl px-6 py-20">
+      {str(props.title) && <h2 className="font-display text-3xl text-paper">{str(props.title)}</h2>}
+      {str(props.subtitle) && <p className="mt-2 text-muted">{str(props.subtitle)}</p>}
+      <div className="mt-8">
+        <Catalog
+          initial={data.lotsResult}
+          basePath={`/p/${schema.slug}`}
+          towers={towers.length ? towers : undefined}
+          portalSlug={schema.slug}
+        />
       </div>
     </section>
   );
