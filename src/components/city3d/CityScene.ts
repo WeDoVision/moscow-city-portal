@@ -140,13 +140,13 @@ function makeWindowTexture(): THREE.Texture {
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < cols; x++) {
       const lit = rnd();
-      if (lit < 0.46) continue; // тёмное окно
-      // холодный sui.io-свет с редкими тёплыми вкраплениями
+      if (lit < 0.66) continue; // большинство окон тёмные → сетка, а не сплошное свечение
+      // холодный sui.io-свет с редкими тёплыми вкраплениями, приглушённый
       const warm = rnd() < 0.18;
-      const a = 0.5 + rnd() * 0.5;
+      const a = 0.22 + rnd() * 0.33;
       ctx.fillStyle = warm
-        ? `rgba(255,${200 + (rnd() * 40) | 0},150,${a})`
-        : `rgba(${180 + (rnd() * 50) | 0},${215 + (rnd() * 40) | 0},255,${a})`;
+        ? `rgba(225,${175 + (rnd() * 35) | 0},120,${a})`
+        : `rgba(${130 + (rnd() * 45) | 0},${165 + (rnd() * 45) | 0},220,${a})`;
       ctx.fillRect(x * cell + 1, y * cell + 1, cell - 2, cell - 2);
     }
   }
@@ -208,7 +208,7 @@ export class CityScene {
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.1;
+    this.renderer.toneMappingExposure = 0.95;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     this.scene.background = bg.clone();
@@ -224,7 +224,8 @@ export class CityScene {
     // постобработка: bloom заставляет окна светиться (ночной небоскрёб, sui.io)
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.9, 0.7, 0.18);
+    // мягкое свечение только у самых ярких окон (не пересвечивать силуэт)
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.32, 0.5, 0.62);
     this.composer.addPass(this.bloom);
 
     // ── свет: холодная ночь + акцентный подсвет центра ──
@@ -302,7 +303,7 @@ export class CityScene {
       envMapIntensity: 1.5,
       emissive: new THREE.Color(0xffffff),
       emissiveMap: winTex,
-      emissiveIntensity: 0.8,
+      emissiveIntensity: 0.4,
     });
     this.bodyMats.push(mat);
 
@@ -539,11 +540,11 @@ export class CityScene {
     this.camera.lookAt(this.camTgt);
 
     // подсветка башен: активная (пауза) / подсвеченные поиском / обычные
-    const pulse = 0.95 + Math.sin(t * 2.2) * 0.18;
+    const pulse = 1 + Math.sin(t * 2.2) * 0.08;
     for (const [id, mats] of this.towerMats) {
       const active = id === this.activeTower;
       const lit = this.highlighted.has(id);
-      const target = active ? 1.5 * pulse : lit ? 1.25 : 0.85;
+      const target = active ? 0.62 * pulse : lit ? 0.52 : 0.4;
       for (const m of mats) {
         m.emissiveIntensity += (target - m.emissiveIntensity) * 0.12;
       }
