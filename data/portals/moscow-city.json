@@ -14,15 +14,23 @@
     "telegram": "https://t.me/whitewill_moscow"
   },
   "theme": {
-    "ink": "oklch(0.98 0.005 245)",
-    "inkSoft": "oklch(0.94 0.008 245)",
-    "inkLine": "oklch(0.86 0.01 245)",
-    "paper": "oklch(0.16 0.03 255)",
-    "paperSoft": "oklch(0.28 0.03 255)",
-    "gold": "oklch(0.72 0.14 255)",
-    "goldDeep": "oklch(0.6 0.16 255)",
-    "muted": "oklch(0.52 0.03 255)",
-    "radius": "0.125rem"
+    "ink": "oklch(0.145 0.03 256)",
+    "inkSoft": "oklch(0.205 0.038 256)",
+    "inkLine": "oklch(0.34 0.05 256)",
+    "paper": "oklch(0.985 0.004 250)",
+    "paperSoft": "oklch(0.94 0.012 250)",
+    "gold": "oklch(0.72 0.15 248)",
+    "goldDeep": "oklch(0.62 0.17 252)",
+    "muted": "oklch(0.66 0.035 250)",
+    "radius": "0",
+    "ease": "cubic-bezier(0.34, 1.56, 0.64, 1)",
+    "bgGradient": "radial-gradient(125% 85% at 50% -15%, oklch(0.27 0.07 252) 0%, oklch(0.165 0.035 254) 48%, oklch(0.115 0.025 256) 100%)",
+    "btnPrimaryBg": "oklch(0.72 0.15 248)",
+    "btnPrimaryInk": "oklch(0.145 0.03 256)",
+    "btnDarkBg": "oklch(0.12 0.02 256)",
+    "btnDarkInk": "oklch(0.985 0.004 250)",
+    "btnLightBg": "oklch(0.985 0.004 250)",
+    "btnLightInk": "oklch(0.145 0.03 256)"
   },
   "scope": {
     "deal": "sale",

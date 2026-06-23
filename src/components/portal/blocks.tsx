@@ -18,6 +18,7 @@ import { towerById } from "@/portal.config";
 import { CityMap3D } from "@/components/city3d/CityMap3D";
 import { DataView, sortItems, toItems } from "@/components/portal/views";
 import { FaqAccordion } from "@/components/portal/FaqAccordion";
+import type { TowerStat } from "@/lib/portal/tower-stats";
 import {
   isSourceId,
   isViewId,
@@ -31,6 +32,8 @@ export type PortalData = {
   complexes: ComplexCard[];
   /** полный результат фетча лотов — для интерактивного блока `catalog` */
   lotsResult: LotFilterResult;
+  /** агрегаты по башням (кол-во лотов, диапазон цен, сэмпл) — для 3D-карты */
+  towerStats: Record<number, TowerStat>;
 };
 
 export type BlockProps = {
@@ -75,14 +78,14 @@ export function HeroBlock({ props, schema }: BlockProps) {
         )}
         <div className="mt-10 flex flex-wrap gap-4">
           <a
-            href={str(props.ctaHref, schema.brand.whatsapp)}
-            className="rounded-[var(--portal-radius)] bg-gold px-7 py-3 font-medium text-ink transition hover:bg-gold-deep"
+            href={str(props.ctaHref, "#catalog")}
+            className="rounded-[var(--portal-radius)] bg-btn-primary px-7 py-3 font-semibold text-btn-primary-ink transition-transform duration-300 hover:-translate-y-0.5 hover:scale-[1.03]"
           >
             {str(props.ctaLabel, "Подобрать объект")}
           </a>
           <a
             href={schema.brand.phoneHref}
-            className="rounded-[var(--portal-radius)] border border-ink-line px-7 py-3 text-paper transition hover:border-gold"
+            className="rounded-[var(--portal-radius)] bg-btn-dark px-7 py-3 font-medium text-btn-dark-ink ring-1 ring-inset ring-ink-line/70 transition-transform duration-300 hover:-translate-y-0.5 hover:scale-[1.03]"
           >
             {schema.brand.phone}
           </a>
@@ -111,6 +114,10 @@ export function City3DBlock({ props, data, schema }: BlockProps) {
   return (
     <CityMap3D
       complexes={data.complexes}
+      towerStats={data.towerStats}
+      portalSlug={schema.slug}
+      title={str(props.title) || undefined}
+      poster={str(props.poster) || str((schema.blocks.find((b) => b.type === "hero")?.props as Record<string, unknown> | undefined)?.image)}
       colors={{
         background: c.background || t.ink,
         building: c.building || t.inkSoft,
@@ -392,7 +399,7 @@ export function CtaBlock({ props, schema }: BlockProps) {
         {str(props.subtitle) && <p className="mt-4 text-muted">{str(props.subtitle)}</p>}
         <a
           href={str(props.buttonHref, schema.brand.whatsapp)}
-          className="mt-8 inline-block rounded-[var(--portal-radius)] bg-gold px-8 py-3 font-medium text-ink transition hover:bg-gold-deep"
+          className="mt-8 inline-block rounded-[var(--portal-radius)] bg-btn-primary px-8 py-3 font-semibold text-btn-primary-ink transition-transform duration-300 hover:-translate-y-0.5 hover:scale-[1.03]"
         >
           {str(props.buttonLabel, "Оставить заявку")}
         </a>

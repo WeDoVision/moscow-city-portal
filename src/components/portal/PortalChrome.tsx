@@ -12,7 +12,7 @@ export function PortalChrome({ schema, children }: { schema: PortalSchema; child
   // свой шрифт по ссылке (Google Fonts и т.п.) — только https
   const fontUrl = /^https:\/\//i.test(schema.theme.fontUrl ?? "") ? schema.theme.fontUrl : null;
   return (
-    <div style={style} className="min-h-screen bg-ink text-paper">
+    <div style={style} className="portal-scope min-h-screen bg-ink text-paper">
       {/* eslint-disable-next-line @next/next/no-page-custom-font */}
       {fontUrl && <link rel="stylesheet" href={fontUrl} />}
       <header className="sticky top-0 z-40 border-b border-ink-line/40 bg-ink/80 backdrop-blur">

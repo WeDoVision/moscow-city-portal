@@ -81,6 +81,15 @@ export class CityScene {
   private frame = 0;
   private disposed = false;
   private center = new THREE.Vector3(0, 220, 0);
+  /** дефолтный центр обзора (середина bbox всех башен) — точка возврата */
+  private defaultCenter = new THREE.Vector3(0, 220, 0);
+  /** куда плавно ведём камеру при fly-to (центр + удаление); null = свободный режим */
+  private focusCenter: THREE.Vector3 | null = null;
+  private focusElevation = 0.55;
+  /** башни без свободных лотов — приглушаем */
+  private emptyTowers = new Set<number>();
+  /** башни, подсвеченные результатами поиска (двусторонняя связка) */
+  private highlighted = new Set<number>();
 
   // цвета сцены (резолвятся из темы портала)
   private cityColor: THREE.Color;
@@ -97,6 +106,8 @@ export class CityScene {
     private onPick: (towerId: number | null) => void,
     colors: MapColors = {},
     view: MapView = {},
+    /** вызывается при смене наведённой башни (для HTML-тултипа) */
+    private onHover: (towerId: number | null) => void = () => {},
   ) {
     if (typeof view.azimuth === "number") this.azimuth = view.azimuth;
     if (typeof view.elevation === "number") {
@@ -216,7 +227,35 @@ export class CityScene {
       const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
       const cz = (Math.min(...zs) + Math.max(...zs)) / 2;
       this.center.set(cx, 220, cz);
+      this.defaultCenter.set(cx, 220, cz);
     }
+  }
+
+  /** Башни без свободных лотов — приглушаются на сцене. */
+  setEmptyTowers(ids: Iterable<number>) {
+    this.emptyTowers = new Set(ids);
+  }
+
+  /** Подсветка башен результатами поиска/фильтров (двусторонняя связка). */
+  setHighlighted(ids: Iterable<number>) {
+    this.highlighted = new Set(ids);
+  }
+
+  /**
+   * Плавный заход камеры к башне (fly-to). null — возврат к общему обзору.
+   * Меняем только точку прицела и удаление; горизонтальный угол не трогаем,
+   * чтобы движение читалось как «подъезд», а не рывок.
+   */
+  focusTower(towerId: number | null) {
+    if (towerId == null) {
+      this.focusCenter = this.defaultCenter.clone();
+      this.focusElevation = 0.55;
+      return;
+    }
+    const a = this.anchors.find((an) => an.id === towerId);
+    if (!a) return;
+    this.focusCenter = new THREE.Vector3(a.x, Math.max(120, a.y * 0.55), a.z);
+    this.focusElevation = 0.32;
   }
 
   resize(w: number, h: number) {
@@ -236,6 +275,8 @@ export class CityScene {
 
   /** обновить угол камеры от драга (dAz в радианах, dEl в долях) */
   rotate(dAz: number, dEl: number) {
+    // пользователь взялся вращать — прекращаем авто-заход камеры
+    this.focusCenter = null;
     this.azimuth += dAz;
     this.elevation = Math.max(0.1, Math.min(0.9, this.elevation + dEl));
   }
@@ -273,6 +314,19 @@ export class CityScene {
 
     if (this.autoRotate) this.azimuth += this.autoRotate;
 
+    // плавный заход/возврат камеры (fly-to): тянем центр и удаление к цели
+    if (this.focusCenter) {
+      this.center.lerp(this.focusCenter, 0.07);
+      this.elevation += (this.focusElevation - this.elevation) * 0.07;
+      if (
+        this.center.distanceToSquared(this.focusCenter) < 4 &&
+        Math.abs(this.elevation - this.focusElevation) < 0.005
+      ) {
+        // доехали — для возврата к общему обзору отпускаем цель
+        if (this.focusCenter.equals(this.defaultCenter)) this.focusCenter = null;
+      }
+    }
+
     const radius = 350 + this.elevation * 900; // 350..1250
     const height = 120 + this.elevation * 700; // 120..820
     const time = performance.now() / 1000;
@@ -290,11 +344,15 @@ export class CityScene {
     if (hoverId !== this.hovered) {
       this.hovered = hoverId;
       this.renderer.domElement.style.cursor = hoverId ? "pointer" : "";
+      this.onHover(hoverId);
     }
+    const pulse = 0.42 + Math.sin(time * 2.4) * 0.13; // мягкое «дыхание» подсветки
     for (const [tid, mesh] of this.towers) {
       const mat = mesh.material as THREE.MeshStandardMaterial;
       const active = tid === this.selected || tid === this.hovered;
-      const target = active ? 0.55 : 0.12;
+      const lit = this.highlighted.has(tid);
+      const empty = this.emptyTowers.has(tid) && !active && !lit;
+      const target = active ? 0.6 : lit ? pulse : empty ? 0.03 : 0.13;
       mat.emissiveIntensity += (target - mat.emissiveIntensity) * 0.15;
     }
 

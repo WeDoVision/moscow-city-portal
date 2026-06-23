@@ -27,8 +27,28 @@ export type Theme = {
   gold: string;
   goldDeep: string;
   muted: string;
-  /** общий радиус скруглений, напр. "0.125rem" или "1rem" */
+  /** общий радиус скруглений, напр. "0.125rem" или "1rem"; "0" — острые углы (sui.io) */
   radius: string;
+  /**
+   * Кривая перехода для интерактива (hover/выбор/камера). Дефолт — мягкий ease;
+   * для «bouncy»-ощущения задайте cubic-bezier с овершутом,
+   * напр. "cubic-bezier(0.34, 1.56, 0.64, 1)".
+   */
+  ease?: string;
+  /**
+   * Фон-градиент страницы портала (поверх `ink`). Любой CSS-градиент,
+   * напр. "radial-gradient(...)". Пусто → сплошной `ink`.
+   */
+  bgGradient?: string;
+  /** Главная кнопка: фон/текст (sui.io — голубая). Дефолт: gold / ink. */
+  btnPrimaryBg?: string;
+  btnPrimaryInk?: string;
+  /** Тёмная кнопка: фон/текст (sui.io — чёрная). Дефолт: ink-soft / paper. */
+  btnDarkBg?: string;
+  btnDarkInk?: string;
+  /** Светлая кнопка: фон/текст (sui.io — белая). Дефолт: paper / ink. */
+  btnLightBg?: string;
+  btnLightInk?: string;
   /** шрифт заголовков: ключ из FONT_OPTIONS ИЛИ имя своего семейства (грузится fontUrl) */
   fontDisplay?: string;
   /** основной шрифт текста: ключ из FONT_OPTIONS ИЛИ имя своего семейства (грузится fontUrl) */
@@ -136,6 +156,17 @@ export function themeToCssVars(theme: Theme): Record<string, string> {
     "--gold-deep": theme.goldDeep,
     "--muted": theme.muted,
     "--portal-radius": theme.radius,
+    // кривая перехода интерактива: дефолт — мягкий ease-out; bouncy задаётся темой
+    "--portal-ease": theme.ease ?? "cubic-bezier(0.22, 1, 0.36, 1)",
+    // фон-градиент страницы (пусто → сплошной ink)
+    "--bg-gradient": theme.bgGradient ?? "none",
+    // токены кнопок (фолбэк на семантику темы, чтобы старые порталы не ломались)
+    "--btn-primary-bg": theme.btnPrimaryBg ?? theme.gold,
+    "--btn-primary-ink": theme.btnPrimaryInk ?? theme.ink,
+    "--btn-dark-bg": theme.btnDarkBg ?? theme.inkSoft,
+    "--btn-dark-ink": theme.btnDarkInk ?? theme.paper,
+    "--btn-light-bg": theme.btnLightBg ?? theme.paper,
+    "--btn-light-ink": theme.btnLightInk ?? theme.ink,
     // шрифты портала: заголовочный (дефолт Prata) и основной (дефолт Manrope)
     "--font-display": fontCss(theme.fontDisplay),
     "--font-sans": theme.fontBody ? fontCss(theme.fontBody) : bodyDefault,

@@ -13,12 +13,14 @@ import { BLOCKS } from "@/lib/portal/registry";
 import { fetchComplexes, fetchLots } from "@/lib/whitewill/client";
 import type { PortalData } from "@/components/portal/blocks";
 import { PortalChrome } from "@/components/portal/PortalChrome";
+import { fetchTowerStats } from "@/lib/portal/tower-stats";
 
 async function loadData(schema: PortalSchema): Promise<PortalData> {
   const scopeTowers = schema.scope.towers ?? [];
-  const [lotsRes, complexesAll] = await Promise.all([
+  const [lotsRes, complexesAll, towerStats] = await Promise.all([
     fetchLots({ deal: schema.scope.deal, towers: scopeTowers, page: 1 }, 600).catch(() => null),
     fetchComplexes().catch(() => [] as Awaited<ReturnType<typeof fetchComplexes>>),
+    fetchTowerStats(schema.scope.deal, scopeTowers).catch(() => ({})),
   ]);
   const complexes = scopeTowers.length
     ? complexesAll.filter((c) => scopeTowers.includes(c.id))
@@ -32,7 +34,13 @@ async function loadData(schema: PortalSchema): Promise<PortalData> {
     isResultEmpty: true,
     moscowLotCardDTOs: [],
   };
-  return { lots: lotsRes?.moscowLotCardDTOs ?? [], complexes, lotsResult: lotsRes ?? empty };
+  const lots = lotsRes?.moscowLotCardDTOs ?? [];
+  return {
+    lots,
+    complexes,
+    lotsResult: lotsRes ?? empty,
+    towerStats,
+  };
 }
 
 export async function PortalRenderer({ schema }: { schema: PortalSchema }) {

@@ -89,6 +89,14 @@ export function Catalog({
     return () => window.removeEventListener("portal:applyFilters", onApply);
   }, [apply]);
 
+  // двусторонняя связка с 3D-картой: какие башни сейчас в фокусе фильтров
+  // (выбраны вручную или применены AI-поиском) — карта их подсвечивает
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent("portal:resultTowers", { detail: { towers: query.towers ?? [] } }),
+    );
+  }, [query.towers]);
+
   // счётчики категорий/башен — отдельный, более редкий запрос
   useEffect(() => {
     const p = new URLSearchParams({ deal: query.deal });
