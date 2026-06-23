@@ -1,14 +1,23 @@
 /**
- * Three.js сцена 3D-карты Москва-Сити.
+ * Three.js сцена 3D-карты Москва-Сити (KRE-189) — реалистично-стилизованная
+ * под тёмную тему sui.io версия.
  *
- * Геометрия — реальные контуры и высоты зданий района из OpenStreetMap
- * (public/data/moscow-city.json, собирается scripts/build_city_data.py).
- * Обычная застройка мержится в один меш; башни портала — отдельные
- * интерактивные меши с подсветкой (hover/selected) и raycast-кликом.
+ *  • Геометрия района (контуры/высоты OSM, public/data/moscow-city.json) идёт
+ *    в приглушённую «контекстную» застройку — город вокруг башен.
+ *  • Семь башен портала — не выдавленные коробки, а узнаваемые силуэты:
+ *    тонкая призма + шпиль (Федерация), «стопка» (Город Столиц), парные
+ *    сужающиеся башни (ОКО/Neva), круглые (Capital/Империя), слим (Дом Дау).
+ *    Материал — тёмное стекло с эмиссивной сеткой окон (ночной небоскрёб).
+ *  • Камера ведётся СКРОЛЛОМ (setProgress 0..1) по маршруту через башни с
+ *    паузами — без ручного вращения.
+ *  • Реальные glTF-модели подключаются позже тем же пайплайном: положите
+ *    /public/models/<slug>.glb и пропишите в TOWER_MODELS — крафт-модель
+ *    заменится загруженной без правок остального кода.
  */
 
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 export type CityBuilding = {
   p: [number, number][];
@@ -18,37 +27,80 @@ export type CityBuilding = {
   t: number | null;
 };
 
-export type TowerAnchor = { id: number; x: number; y: number; z: number };
-
-/** Цвета сцены, приходят из темы портала (любой CSS-формат). */
-/** Параметры камеры карты (настраиваются из админки/ИИ). */
-export type MapView = {
-  /** горизонтальный угол (поворот) в радианах */
-  azimuth?: number;
-  /** вертикальный угол/удаление 0..1 (0 — низко/близко, 1 — высоко/далеко) */
-  elevation?: number;
-  /** медленный автоповорот камеры */
-  autoRotate?: boolean;
-};
-
 export type MapColors = {
-  /** фон/туман/земля — фон портала */
   background?: string;
-  /** обычная застройка */
   building?: string;
-  /** база башен */
   tower?: string;
-  /** акцент: грани башен, тёплый свет */
   accent?: string;
-  /** тёмный акцент: свечение башен */
   accentDeep?: string;
 };
 
+/** Профиль одного корпуса башни (метры; смещения от центроида футпринта). */
+type Body = {
+  shape: "box" | "tri" | "round";
+  /** «радиус» до углов сечения у основания, м */
+  r: number;
+  /** высота, м */
+  h: number;
+  /** сужение верха (radiusTop = r*taper) */
+  taper?: number;
+  /** смещение корпуса от центроида башни, м */
+  ox?: number;
+  oz?: number;
+  /** тонкий шпиль сверху (Федерация) */
+  spire?: number;
+  /** скруглённый купол сверху (Империя) */
+  dome?: boolean;
+  /** «стопка» сдвинутых блоков (Город Столиц): число уровней */
+  stack?: number;
+};
+
 /**
- * Любой CSS-цвет (oklch/hex/rgb) → "#rrggbb". Растеризуем 1 пиксель и читаем
- * getImageData — это даёт реальный RGB, минуя сериализацию (Three не понимает
- * oklch, поэтому конвертируем заранее, сохраняя sRGB-трактовку как у hex).
+ * Силуэты семи башен (узнаваемые пропорции реальных зданий Сити).
+ * Высоты — реальные (м), не из устаревшего OSM.
  */
+const TOWER_BODIES: Record<number, Body[]> = {
+  // Capital Towers — три круглые башни у воды
+  1: [
+    { shape: "round", r: 21, h: 295, taper: 0.92, ox: -46, oz: -4 },
+    { shape: "round", r: 21, h: 295, taper: 0.92, ox: 4, oz: 22 },
+    { shape: "round", r: 19, h: 158, taper: 0.95, ox: 48, oz: -12 },
+  ],
+  // Neva Towers — две сужающиеся башни
+  104: [
+    { shape: "box", r: 27, h: 345, taper: 0.66, ox: -40, oz: -6 },
+    { shape: "box", r: 25, h: 302, taper: 0.68, ox: 42, oz: 16 },
+  ],
+  // ОКО — высокая жилая + офисная пониже
+  107: [
+    { shape: "box", r: 29, h: 354, taper: 0.74, ox: -46, oz: -2 },
+    { shape: "box", r: 27, h: 245, taper: 0.8, ox: 50, oz: 22 },
+  ],
+  // Федерация — две треугольные призмы + шпиль (Восток самый высокий)
+  115: [
+    { shape: "tri", r: 33, h: 374, taper: 0.46, ox: -34, oz: 0, spire: 90 },
+    { shape: "tri", r: 30, h: 243, taper: 0.5, ox: 40, oz: 12 },
+  ],
+  // Город Столиц — две «стопки» сдвинутых блоков (Москва выше, Петербург)
+  558: [
+    { shape: "box", r: 26, h: 302, ox: -32, oz: -2, stack: 5 },
+    { shape: "box", r: 24, h: 257, ox: 34, oz: 14, stack: 4 },
+  ],
+  // Империя — башня со скруглённой вершиной
+  503: [{ shape: "round", r: 27, h: 239, taper: 0.86, dome: true }],
+  // Дом Дау — одиночный слим-небоскрёб
+  69: [{ shape: "box", r: 23, h: 340, taper: 0.6 }],
+};
+
+/** Реальные glTF-модели (по slug). Пусто → используется крафт-силуэт. */
+const TOWER_MODELS: Record<number, { url: string; scale?: number; yaw?: number }> = {
+  // пример: 115: { url: "/models/federation.glb", scale: 1, yaw: 0 },
+};
+
+/** Порядок облёта камеры (как в каталоге портала). */
+const TOWER_ORDER = [1, 104, 107, 115, 558, 503, 69];
+
+/** Любой CSS-цвет (oklch/hex/rgb) → "#rrggbb" через растеризацию 1px. */
 function cssToHex(input: string | undefined, fallback: string): string {
   if (!input) return fallback;
   try {
@@ -64,62 +116,83 @@ function cssToHex(input: string | undefined, fallback: string): string {
   }
 }
 
+/** Эмиссивная текстура «сетка светящихся окон» — общий ночной look башен. */
+function makeWindowTexture(): THREE.Texture {
+  const cols = 24,
+    rows = 64,
+    cell = 8;
+  const cv = document.createElement("canvas");
+  cv.width = cols * cell;
+  cv.height = rows * cell;
+  const ctx = cv.getContext("2d")!;
+  ctx.fillStyle = "#05070d";
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  // детерминированный псевдослучай (без Math.random — стабильный кадр)
+  let s = 1337;
+  const rnd = () => {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    return s / 0x7fffffff;
+  };
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const lit = rnd();
+      if (lit < 0.46) continue; // тёмное окно
+      // холодный sui.io-свет с редкими тёплыми вкраплениями
+      const warm = rnd() < 0.18;
+      const a = 0.5 + rnd() * 0.5;
+      ctx.fillStyle = warm
+        ? `rgba(255,${200 + (rnd() * 40) | 0},150,${a})`
+        : `rgba(${180 + (rnd() * 50) | 0},${215 + (rnd() * 40) | 0},255,${a})`;
+      ctx.fillRect(x * cell + 1, y * cell + 1, cell - 2, cell - 2);
+    }
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+type ViewKF = { pos: THREE.Vector3; tgt: THREE.Vector3 };
+
 export class CityScene {
   renderer: THREE.WebGLRenderer;
   scene = new THREE.Scene();
   camera: THREE.PerspectiveCamera;
-  towers = new Map<number, THREE.Mesh>();
-  anchors: TowerAnchor[] = [];
-  private raycaster = new THREE.Raycaster();
-  private pointer = new THREE.Vector2();
-  private hovered: number | null = null;
-  selected: number | null = null;
-  /** горизонтальный угол камеры (драг по X) */
-  azimuth = -0.65;
-  /** вертикальный угол 0..1 (0 = близко/низко, 1 = далеко/высоко) */
-  elevation = 0.55;
+  /** id башен в порядке облёта (для маппинга прогресса в React) */
+  order: number[] = [];
+
+  private towers = new Map<number, THREE.Object3D>();
+  private towerMats = new Map<number, THREE.MeshStandardMaterial[]>();
+  private anchors = new Map<number, { x: number; z: number; h: number }>();
+  private views: ViewKF[] = []; // [overview, ...пербашенно]
+  private overview!: ViewKF;
+
+  private highlighted = new Set<number>();
+  private activeTower: number | null = null;
+
+  private progress = 0; // 0..1, ведётся скроллом
+  private camPos = new THREE.Vector3();
+  private camTgt = new THREE.Vector3();
   private frame = 0;
   private disposed = false;
-  private center = new THREE.Vector3(0, 220, 0);
-  /** дефолтный центр обзора (середина bbox всех башен) — точка возврата */
-  private defaultCenter = new THREE.Vector3(0, 220, 0);
-  /** куда плавно ведём камеру при fly-to (центр + удаление); null = свободный режим */
-  private focusCenter: THREE.Vector3 | null = null;
-  private focusElevation = 0.55;
-  /** башни без свободных лотов — приглушаем */
-  private emptyTowers = new Set<number>();
-  /** башни, подсвеченные результатами поиска (двусторонняя связка) */
-  private highlighted = new Set<number>();
 
-  // цвета сцены (резолвятся из темы портала)
   private cityColor: THREE.Color;
   private towerColor: THREE.Color;
   private accentColor: THREE.Color;
-  private accentDeepColor: THREE.Color;
-
-  /** скорость автоповорота (рад/кадр); 0 — выключен */
-  private autoRotate = 0;
+  private windowTex: THREE.Texture;
 
   constructor(
     canvas: HTMLCanvasElement,
     buildings: CityBuilding[],
-    private onPick: (towerId: number | null) => void,
     colors: MapColors = {},
-    view: MapView = {},
-    /** вызывается при смене наведённой башни (для HTML-тултипа) */
-    private onHover: (towerId: number | null) => void = () => {},
+    private onReady: () => void = () => {},
   ) {
-    if (typeof view.azimuth === "number") this.azimuth = view.azimuth;
-    if (typeof view.elevation === "number") {
-      this.elevation = Math.max(0, Math.min(view.elevation, 1));
-    }
-    if (view.autoRotate) this.autoRotate = 0.0012;
-
-    const bg = new THREE.Color(cssToHex(colors.background, "#0e1015"));
-    this.cityColor = new THREE.Color(cssToHex(colors.building, "#14161d"));
-    this.towerColor = new THREE.Color(cssToHex(colors.tower, "#232838"));
-    this.accentColor = new THREE.Color(cssToHex(colors.accent, "#c9a96e"));
-    this.accentDeepColor = new THREE.Color(cssToHex(colors.accentDeep, "#6e5c39"));
+    const bg = new THREE.Color(cssToHex(colors.background, "#0c1018"));
+    this.cityColor = new THREE.Color(cssToHex(colors.building, "#11151f"));
+    this.towerColor = new THREE.Color(cssToHex(colors.tower, "#0b0f1a"));
+    this.accentColor = new THREE.Color(cssToHex(colors.accent, "#4da2ff"));
+    this.windowTex = makeWindowTexture();
 
     this.renderer = new THREE.WebGLRenderer({
       canvas,
@@ -128,134 +201,294 @@ export class CityScene {
       powerPreference: "high-performance",
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.1;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-    this.camera = new THREE.PerspectiveCamera(58, 1, 10, 6000);
-    // туман уводит дальние здания в цвет фона портала
-    this.scene.fog = new THREE.Fog(bg.clone(), 900, 3200);
+    this.scene.background = bg.clone();
+    this.scene.fog = new THREE.FogExp2(bg.clone(), 0.00035);
 
-    // нейтральный заполняющий свет, чтобы цвета поверхностей читались как в теме;
-    // лунный холодный + тёплый акцентный «контровой» для объёма
-    this.scene.add(new THREE.AmbientLight(0xffffff, 0.85));
-    const moon = new THREE.DirectionalLight(0xbfd0e8, 1.1);
-    moon.position.set(-600, 900, -400);
+    this.camera = new THREE.PerspectiveCamera(50, 1, 5, 12000);
+
+    // ── свет: холодная ночь + акцентный подсвет центра ──
+    this.scene.add(new THREE.HemisphereLight(0x9fb8e0, 0x05070c, 0.55));
+    this.scene.add(new THREE.AmbientLight(0xffffff, 0.18));
+    const moon = new THREE.DirectionalLight(0xbcd0f0, 0.7);
+    moon.position.set(-700, 1100, -500);
     this.scene.add(moon);
-    const warm = new THREE.DirectionalLight(this.accentColor.clone(), 0.7);
-    warm.position.set(500, 300, 700);
-    this.scene.add(warm);
+    const glow = new THREE.PointLight(this.accentColor.clone(), 0.9, 2600, 1.4);
+    glow.position.set(-120, 260, -160);
+    this.scene.add(glow);
 
-    // земля — цвет фона портала
+    // ── тёмная городская подложка + sui.io-сетка (без воды) ──
     const ground = new THREE.Mesh(
-      new THREE.CircleGeometry(2600, 64),
-      new THREE.MeshLambertMaterial({ color: bg }),
+      new THREE.CircleGeometry(5000, 72),
+      new THREE.MeshStandardMaterial({ color: bg.clone().multiplyScalar(1.15), metalness: 0.4, roughness: 0.75 }),
     );
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -0.5;
     this.scene.add(ground);
+    const grid = new THREE.GridHelper(6000, 80, this.accentColor.clone(), this.accentColor.clone());
+    (grid.material as THREE.Material).transparent = true;
+    (grid.material as THREE.Material).opacity = 0.06;
+    grid.position.y = 0;
+    this.scene.add(grid);
 
-    this.buildCity(buildings);
+    this.computeAnchors(buildings);
+    this.buildContext(buildings);
+    this.buildTowers();
+    this.buildPath();
+    this.loadModels();
+
+    this.progress = 0;
+    this.applyProgress(0);
+    this.camera.position.copy(this.camPos);
+    this.camera.lookAt(this.camTgt);
     this.animate();
+    this.onReady();
   }
 
-  private extrude(b: CityBuilding): THREE.BufferGeometry | null {
-    if (b.p.length < 3) return null;
-    const shape = new THREE.Shape(b.p.map(([x, z]) => new THREE.Vector2(x, -z)));
-    const geo = new THREE.ExtrudeGeometry(shape, {
-      depth: b.h - b.mh,
-      bevelEnabled: false,
-    });
-    // ExtrudeGeometry растёт по z — поворачиваем в y-up
-    geo.rotateX(-Math.PI / 2);
-    geo.translate(0, b.mh, 0);
-    return geo;
-  }
-
-  private buildCity(buildings: CityBuilding[]) {
-    const cityGeos: THREE.BufferGeometry[] = [];
-    const towerGeos = new Map<number, THREE.BufferGeometry[]>();
-    const towerTops = new Map<number, { x: number; z: number; h: number }>();
-
+  // ── приглушённая контекстная застройка района (один меш) ──
+  private buildContext(buildings: CityBuilding[]) {
+    const geos: THREE.BufferGeometry[] = [];
     for (const b of buildings) {
-      const geo = this.extrude(b);
-      if (!geo) continue;
-      if (b.t != null) {
-        if (!towerGeos.has(b.t)) towerGeos.set(b.t, []);
-        towerGeos.get(b.t)!.push(geo);
-        const cx = b.p.reduce((s, p) => s + p[0], 0) / b.p.length;
-        const cz = b.p.reduce((s, p) => s + p[1], 0) / b.p.length;
-        const prev = towerTops.get(b.t);
-        if (!prev || b.h > prev.h) towerTops.set(b.t, { x: cx, z: cz, h: b.h });
-      } else {
-        cityGeos.push(geo);
+      if (b.t != null || b.p.length < 3) continue; // башни строим отдельно
+      const shape = new THREE.Shape(b.p.map(([x, z]) => new THREE.Vector2(x, -z)));
+      const geo = new THREE.ExtrudeGeometry(shape, { depth: b.h - b.mh, bevelEnabled: false });
+      geo.rotateX(-Math.PI / 2);
+      geo.translate(0, b.mh, 0);
+      geos.push(geo);
+    }
+    if (!geos.length) return;
+    const mat = new THREE.MeshStandardMaterial({
+      color: this.cityColor,
+      metalness: 0.6,
+      roughness: 0.5,
+      transparent: true,
+      opacity: 0.92,
+      emissive: this.accentColor.clone().multiplyScalar(0.04),
+    });
+    const mesh = new THREE.Mesh(mergeGeometries(geos, false), mat);
+    this.scene.add(mesh);
+  }
+
+  /** Один корпус башни из призмы CylinderGeometry (tri/box/round + тапер). */
+  private makeBody(b: Body): THREE.Object3D {
+    const seg = b.shape === "tri" ? 3 : b.shape === "round" ? 30 : 4;
+    const group = new THREE.Group();
+    const winTex = this.windowTex.clone();
+    winTex.needsUpdate = true;
+    winTex.repeat.set(b.shape === "round" ? 6 : seg, Math.max(6, Math.round(b.h / 14)));
+    const mat = new THREE.MeshStandardMaterial({
+      color: this.towerColor.clone(),
+      metalness: 0.92,
+      roughness: 0.16,
+      emissive: new THREE.Color(0xffffff),
+      emissiveMap: winTex,
+      emissiveIntensity: 0.85,
+    });
+    this.bodyMats.push(mat);
+
+    if (b.stack) {
+      // «стопка» сдвинутых блоков (Город Столиц)
+      const levels = b.stack;
+      const lh = b.h / levels;
+      for (let i = 0; i < levels; i++) {
+        const r = b.r * (1 - i * 0.04);
+        const geo = new THREE.CylinderGeometry(r, r, lh * 1.02, 4);
+        geo.rotateY(Math.PI / 4);
+        const m = new THREE.Mesh(geo, mat);
+        m.position.y = lh * (i + 0.5);
+        m.position.x = (i % 2 === 0 ? 1 : -1) * b.r * 0.28;
+        m.position.z = (i % 2 === 0 ? -1 : 1) * b.r * 0.2;
+        group.add(m);
+      }
+    } else {
+      const rTop = b.r * (b.taper ?? 0.8);
+      const geo = new THREE.CylinderGeometry(rTop, b.r, b.h, seg, 1, false);
+      if (b.shape === "box") geo.rotateY(Math.PI / 4);
+      const m = new THREE.Mesh(geo, mat);
+      m.position.y = b.h / 2;
+      group.add(m);
+
+      if (b.dome) {
+        const dome = new THREE.Mesh(
+          new THREE.SphereGeometry(rTop, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+          mat,
+        );
+        dome.position.y = b.h;
+        group.add(dome);
+      }
+      if (b.spire) {
+        const spireMat = new THREE.MeshStandardMaterial({
+          color: this.towerColor.clone(),
+          metalness: 0.9,
+          roughness: 0.3,
+          emissive: this.accentColor.clone(),
+          emissiveIntensity: 0.5,
+        });
+        const sp = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 5, b.spire, 8), spireMat);
+        sp.position.y = b.h + b.spire / 2;
+        group.add(sp);
       }
     }
 
-    const cityMat = new THREE.MeshLambertMaterial({
-      color: this.cityColor,
-      transparent: true,
-      opacity: 0.92,
-    });
-    const city = new THREE.Mesh(mergeGeometries(cityGeos, false), cityMat);
-    this.scene.add(city);
+    // тонкая акцентная окантовка силуэта
+    group.position.set(b.ox ?? 0, 0, b.oz ?? 0);
+    return group;
+  }
 
-    for (const [tid, geos] of towerGeos) {
-      const mat = new THREE.MeshStandardMaterial({
-        color: this.towerColor.clone(),
-        metalness: 0.85,
-        roughness: 0.35,
-        emissive: this.accentDeepColor.clone(),
-        emissiveIntensity: 0.12,
-      });
-      const mesh = new THREE.Mesh(mergeGeometries(geos, false), mat);
-      mesh.userData.towerId = tid;
-      this.scene.add(mesh);
-      this.towers.set(tid, mesh);
+  private bodyMats: THREE.MeshStandardMaterial[] = [];
 
-      const edges = new THREE.LineSegments(
-        new THREE.EdgesGeometry(mesh.geometry, 30),
-        new THREE.LineBasicMaterial({ color: this.accentColor.clone(), transparent: true, opacity: 0.35 }),
+  /** Центроид + высота каждой башни из футпринтов OSM (b.t != null). */
+  private computeAnchors(buildings: CityBuilding[]) {
+    const acc = new Map<number, { xs: number[]; zs: number[]; h: number }>();
+    for (const b of buildings) {
+      if (b.t == null) continue;
+      const cur = acc.get(b.t) ?? { xs: [], zs: [], h: 0 };
+      for (const [x, z] of b.p) {
+        cur.xs.push(x);
+        cur.zs.push(z);
+      }
+      cur.h = Math.max(cur.h, b.h);
+      acc.set(b.t, cur);
+    }
+    for (const [id, v] of acc) {
+      const x = (Math.min(...v.xs) + Math.max(...v.xs)) / 2;
+      const z = (Math.min(...v.zs) + Math.max(...v.zs)) / 2;
+      this.anchors.set(id, { x, z, h: v.h });
+    }
+  }
+
+  private buildTowers() {
+    for (const id of TOWER_ORDER) {
+      const a = this.anchors.get(id);
+      const bodies = TOWER_BODIES[id];
+      if (!a || !bodies) continue;
+      const group = new THREE.Group();
+      this.bodyMats = [];
+      for (const b of bodies) group.add(this.makeBody(b));
+      group.position.set(a.x, 0, a.z);
+      this.scene.add(group);
+      this.towers.set(id, group);
+      this.towerMats.set(id, this.bodyMats);
+    }
+  }
+
+  /** Отображаемая высота башни (по крафт-силуэту) — для кадрирования камеры. */
+  private displayHeight(id: number): number {
+    const bodies = TOWER_BODIES[id];
+    if (!bodies) return this.anchors.get(id)?.h ?? 250;
+    return Math.max(...bodies.map((b) => b.h + (b.spire ?? 0)));
+  }
+
+  // ── маршрут камеры: обзор + видовая точка на каждую башню ──
+  private buildPath() {
+    const ids = TOWER_ORDER.filter((id) => this.anchors.has(id));
+    this.order = ids;
+    const cx = [...this.anchors.values()].reduce((s, a) => s + a.x, 0) / Math.max(1, this.anchors.size);
+    const cz = [...this.anchors.values()].reduce((s, a) => s + a.z, 0) / Math.max(1, this.anchors.size);
+
+    // обзорная точка: высоко и позади центра
+    this.overview = {
+      pos: new THREE.Vector3(cx + 250, 1050, cz + 1300),
+      tgt: new THREE.Vector3(cx, 120, cz),
+    };
+
+    for (const id of ids) {
+      const a = this.anchors.get(id)!;
+      const H = this.displayHeight(id);
+      // направление «от центра к башне» по горизонтали → камера за башней,
+      // город остаётся на фоне силуэта
+      let dx = a.x - cx,
+        dz = a.z - cz;
+      const len = Math.hypot(dx, dz) || 1;
+      dx /= len;
+      dz /= len;
+      const dist = H * 1.05 + 240;
+      const pos = new THREE.Vector3(a.x + dx * dist, H * 0.66 + 70, a.z + dz * dist);
+      const tgt = new THREE.Vector3(a.x, H * 0.5, a.z);
+      this.views.push({ pos, tgt });
+    }
+  }
+
+  private loadModels() {
+    const entries = Object.entries(TOWER_MODELS);
+    if (!entries.length) return;
+    const loader = new GLTFLoader();
+    for (const [idStr, cfg] of entries) {
+      const id = Number(idStr);
+      const a = this.anchors.get(id);
+      if (!a) continue;
+      loader.load(
+        cfg.url,
+        (gltf) => {
+          const crafted = this.towers.get(id);
+          if (crafted) this.scene.remove(crafted);
+          const obj = gltf.scene;
+          obj.position.set(a.x, 0, a.z);
+          if (cfg.scale) obj.scale.setScalar(cfg.scale);
+          if (cfg.yaw) obj.rotation.y = cfg.yaw;
+          obj.traverse((o) => {
+            if ((o as THREE.Mesh).isMesh) {
+              const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial;
+              if (m) {
+                m.metalness = 0.9;
+                m.roughness = 0.2;
+              }
+            }
+          });
+          this.scene.add(obj);
+          this.towers.set(id, obj);
+        },
+        undefined,
+        () => {
+          /* модель не загрузилась — остаётся крафт-силуэт */
+        },
       );
-      mesh.add(edges);
-
-      const top = towerTops.get(tid)!;
-      this.anchors.push({ id: tid, x: top.x, y: top.h + 14, z: top.z });
-    }
-
-    // центрируем lookAt по середине bbox всех башен
-    if (this.anchors.length) {
-      const xs = this.anchors.map((a) => a.x);
-      const zs = this.anchors.map((a) => a.z);
-      const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
-      const cz = (Math.min(...zs) + Math.max(...zs)) / 2;
-      this.center.set(cx, 220, cz);
-      this.defaultCenter.set(cx, 220, cz);
     }
   }
 
-  /** Башни без свободных лотов — приглушаются на сцене. */
-  setEmptyTowers(ids: Iterable<number>) {
-    this.emptyTowers = new Set(ids);
+  // ── прогресс скролла → позиция камеры ──
+  private ease(x: number) {
+    return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
   }
 
-  /** Подсветка башен результатами поиска/фильтров (двусторонняя связка). */
+  setProgress(p: number) {
+    this.progress = Math.max(0, Math.min(1, p));
+  }
+
+  /** Активная башня (в паузе) — подсветка силуэта. */
+  setActiveTower(id: number | null) {
+    this.activeTower = id;
+  }
+
   setHighlighted(ids: Iterable<number>) {
     this.highlighted = new Set(ids);
   }
 
-  /**
-   * Плавный заход камеры к башне (fly-to). null — возврат к общему обзору.
-   * Меняем только точку прицела и удаление; горизонтальный угол не трогаем,
-   * чтобы движение читалось как «подъезд», а не рывок.
-   */
-  focusTower(towerId: number | null) {
-    if (towerId == null) {
-      this.focusCenter = this.defaultCenter.clone();
-      this.focusElevation = 0.55;
+  private applyProgress(p: number) {
+    const N = this.views.length;
+    if (!N) {
+      this.camPos.copy(this.overview.pos);
+      this.camTgt.copy(this.overview.tgt);
       return;
     }
-    const a = this.anchors.find((an) => an.id === towerId);
-    if (!a) return;
-    this.focusCenter = new THREE.Vector3(a.x, Math.max(120, a.y * 0.55), a.z);
-    this.focusElevation = 0.32;
+    const slot = 1 / N;
+    let i = Math.floor(p / slot);
+    if (i >= N) i = N - 1;
+    const local = (p - i * slot) / slot; // 0..1 в слоте
+    const from = i === 0 ? this.overview : this.views[i - 1];
+    const to = this.views[i];
+    const travel = 0.55;
+    if (local < travel) {
+      const e = this.ease(local / travel);
+      this.camPos.lerpVectors(from.pos, to.pos, e);
+      this.camTgt.lerpVectors(from.tgt, to.tgt, e);
+    } else {
+      this.camPos.copy(to.pos);
+      this.camTgt.copy(to.tgt);
+    }
   }
 
   resize(w: number, h: number) {
@@ -264,96 +497,26 @@ export class CityScene {
     this.camera.updateProjectionMatrix();
   }
 
-  /** курсор ушёл с карты — уводим точку прицела за кадр, чтобы hover/курсор не «залипали» */
-  clearHover() {
-    this.pointer.set(2, 2); // вне NDC [-1,1] → raycaster ничего не находит
-  }
-
-  setPointer(xNdc: number, yNdc: number) {
-    this.pointer.set(xNdc, yNdc);
-  }
-
-  /** обновить угол камеры от драга (dAz в радианах, dEl в долях) */
-  rotate(dAz: number, dEl: number) {
-    // пользователь взялся вращать — прекращаем авто-заход камеры
-    this.focusCenter = null;
-    this.azimuth += dAz;
-    this.elevation = Math.max(0.1, Math.min(0.9, this.elevation + dEl));
-  }
-
-  pick(): number | null {
-    this.raycaster.setFromCamera(this.pointer, this.camera);
-    const hits = this.raycaster.intersectObjects([...this.towers.values()], false);
-    const tid = hits.length ? (hits[0].object.userData.towerId as number) : null;
-    return tid;
-  }
-
-  click() {
-    const tid = this.pick();
-    this.selected = tid;
-    this.onPick(tid);
-  }
-
-  setSelected(tid: number | null) {
-    this.selected = tid;
-  }
-
-  /** экранная позиция якоря башни для HTML-лейблов */
-  anchorScreen(a: TowerAnchor, w: number, h: number) {
-    const v = new THREE.Vector3(a.x, a.y, a.z).project(this.camera);
-    return {
-      x: ((v.x + 1) / 2) * w,
-      y: ((1 - v.y) / 2) * h,
-      visible: v.z < 1,
-    };
-  }
-
   private animate = () => {
     if (this.disposed) return;
     this.frame = requestAnimationFrame(this.animate);
 
-    if (this.autoRotate) this.azimuth += this.autoRotate;
+    this.applyProgress(this.progress);
+    const t = performance.now() / 1000;
+    // мягкое плавание камеры (демонстрирует «живость» без ручного управления)
+    this.camera.position.lerp(this.camPos, 0.12);
+    this.camera.position.y += Math.sin(t * 0.5) * 1.5;
+    this.camera.lookAt(this.camTgt);
 
-    // плавный заход/возврат камеры (fly-to): тянем центр и удаление к цели
-    if (this.focusCenter) {
-      this.center.lerp(this.focusCenter, 0.07);
-      this.elevation += (this.focusElevation - this.elevation) * 0.07;
-      if (
-        this.center.distanceToSquared(this.focusCenter) < 4 &&
-        Math.abs(this.elevation - this.focusElevation) < 0.005
-      ) {
-        // доехали — для возврата к общему обзору отпускаем цель
-        if (this.focusCenter.equals(this.defaultCenter)) this.focusCenter = null;
+    // подсветка башен: активная (пауза) / подсвеченные поиском / обычные
+    const pulse = 0.95 + Math.sin(t * 2.2) * 0.18;
+    for (const [id, mats] of this.towerMats) {
+      const active = id === this.activeTower;
+      const lit = this.highlighted.has(id);
+      const target = active ? 1.5 * pulse : lit ? 1.25 : 0.85;
+      for (const m of mats) {
+        m.emissiveIntensity += (target - m.emissiveIntensity) * 0.12;
       }
-    }
-
-    const radius = 350 + this.elevation * 900; // 350..1250
-    const height = 120 + this.elevation * 700; // 120..820
-    const time = performance.now() / 1000;
-    const breathe = Math.sin(time * 0.4) * 8;
-    this.camera.position.set(
-      this.center.x + Math.sin(this.azimuth) * radius,
-      height + breathe,
-      this.center.z + Math.cos(this.azimuth) * radius,
-    );
-    this.camera.lookAt(this.center);
-
-    // hover-подсветка; курсор меняем ТОЛЬКО на канвасе (не на всём body),
-    // иначе pointer «залипает» на всей странице
-    const hoverId = this.pick();
-    if (hoverId !== this.hovered) {
-      this.hovered = hoverId;
-      this.renderer.domElement.style.cursor = hoverId ? "pointer" : "";
-      this.onHover(hoverId);
-    }
-    const pulse = 0.42 + Math.sin(time * 2.4) * 0.13; // мягкое «дыхание» подсветки
-    for (const [tid, mesh] of this.towers) {
-      const mat = mesh.material as THREE.MeshStandardMaterial;
-      const active = tid === this.selected || tid === this.hovered;
-      const lit = this.highlighted.has(tid);
-      const empty = this.emptyTowers.has(tid) && !active && !lit;
-      const target = active ? 0.6 : lit ? pulse : empty ? 0.03 : 0.13;
-      mat.emissiveIntensity += (target - mat.emissiveIntensity) * 0.15;
     }
 
     this.renderer.render(this.scene, this.camera);
@@ -362,13 +525,12 @@ export class CityScene {
   dispose() {
     this.disposed = true;
     cancelAnimationFrame(this.frame);
-    document.body.style.cursor = "";
+    this.windowTex.dispose();
     this.scene.traverse((o) => {
-      if (o instanceof THREE.Mesh || o instanceof THREE.LineSegments) {
-        o.geometry.dispose();
-        const m = o.material as THREE.Material | THREE.Material[];
-        (Array.isArray(m) ? m : [m]).forEach((mm) => mm.dispose());
-      }
+      const mesh = o as THREE.Mesh;
+      if (mesh.geometry) mesh.geometry.dispose();
+      const m = (mesh as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
+      if (m) (Array.isArray(m) ? m : [m]).forEach((mm) => mm.dispose());
     });
     this.renderer.dispose();
   }

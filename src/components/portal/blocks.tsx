@@ -104,13 +104,6 @@ export function City3DBlock({ props, data, schema }: BlockProps) {
   const t = schema.theme;
   // по умолчанию цвета карты наследуются из темы; props.colors их перекрывает
   const c = (props.colors ?? {}) as Record<string, string | undefined>;
-  // параметры камеры (угол/удаление/автоповорот) — опционально из props.camera
-  const cam = (props.camera ?? {}) as Record<string, unknown>;
-  const view = {
-    azimuth: typeof cam.azimuth === "number" ? cam.azimuth : undefined,
-    elevation: typeof cam.elevation === "number" ? cam.elevation : undefined,
-    autoRotate: cam.autoRotate === true,
-  };
   return (
     <CityMap3D
       complexes={data.complexes}
@@ -125,7 +118,6 @@ export function City3DBlock({ props, data, schema }: BlockProps) {
         accent: c.accent || t.gold,
         accentDeep: c.accentDeep || t.goldDeep,
       }}
-      view={view}
     />
   );
 }
