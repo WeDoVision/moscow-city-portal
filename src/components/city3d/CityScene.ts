@@ -172,11 +172,11 @@ function makeNightEnv(accent: THREE.Color): THREE.Texture {
   cv.height = h;
   const ctx = cv.getContext("2d")!;
   const g = ctx.createLinearGradient(0, 0, 0, h);
-  g.addColorStop(0, "#16223a"); // зенит
-  g.addColorStop(0.5, "#0b1322");
-  g.addColorStop(0.6, `#${accent.clone().multiplyScalar(0.5).getHexString()}`); // свечение горизонта
-  g.addColorStop(0.66, "#0a0e16");
-  g.addColorStop(1, "#05070c"); // земля
+  g.addColorStop(0, "#2c4068"); // зенит (светлее)
+  g.addColorStop(0.5, "#16223c");
+  g.addColorStop(0.6, `#${accent.clone().multiplyScalar(0.7).getHexString()}`); // свечение горизонта
+  g.addColorStop(0.66, "#121a2a");
+  g.addColorStop(1, "#0a0e16"); // земля
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, w, h);
   // редкие огни города у линии горизонта — оживляют отражения
@@ -244,11 +244,13 @@ export class CityScene {
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 0.95;
+    this.renderer.toneMappingExposure = 1.3;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-    this.scene.background = bg.clone();
-    this.scene.fog = new THREE.FogExp2(bg.clone(), 0.00035);
+    // фон чуть светлее «чернил», чтобы силуэты не тонули в черноте
+    const sceneBg = bg.clone().lerp(new THREE.Color("#1b2740"), 0.35);
+    this.scene.background = sceneBg.clone();
+    this.scene.fog = new THREE.FogExp2(sceneBg.clone(), 0.00022);
 
     // отражения окружения: ночной градиент (зенит-синь → свечение горизонта →
     // тёмная земля) через PMREM. Тёмное стекло начинает отражать «ночь», а не
@@ -267,27 +269,34 @@ export class CityScene {
     this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.32, 0.5, 0.62);
     this.composer.addPass(this.bloom);
 
-    // ── свет: холодная ночь + акцентный подсвет центра ──
-    this.scene.add(new THREE.HemisphereLight(0x9fb8e0, 0x05070c, 0.55));
-    this.scene.add(new THREE.AmbientLight(0xffffff, 0.18));
-    const moon = new THREE.DirectionalLight(0xbcd0f0, 0.7);
+    // ── свет: холодная ночь + акцентный подсвет центра (поярче, чтобы фасады читались) ──
+    this.scene.add(new THREE.HemisphereLight(0xaecbf2, 0x0a1018, 1.0));
+    this.scene.add(new THREE.AmbientLight(0xffffff, 0.42));
+    const moon = new THREE.DirectionalLight(0xd2e2ff, 1.15);
     moon.position.set(-700, 1100, -500);
     this.scene.add(moon);
-    const glow = new THREE.PointLight(this.accentColor.clone(), 0.9, 2600, 1.4);
-    glow.position.set(-120, 260, -160);
+    const fill = new THREE.DirectionalLight(0xbcd0f0, 0.5);
+    fill.position.set(600, 500, 700);
+    this.scene.add(fill);
+    const glow = new THREE.PointLight(this.accentColor.clone(), 1.2, 2800, 1.3);
+    glow.position.set(-120, 280, -160);
     this.scene.add(glow);
 
     // ── тёмная городская подложка + sui.io-сетка (без воды) ──
     const ground = new THREE.Mesh(
       new THREE.CircleGeometry(5000, 72),
-      new THREE.MeshStandardMaterial({ color: bg.clone().multiplyScalar(1.15), metalness: 0.4, roughness: 0.75 }),
+      new THREE.MeshStandardMaterial({
+        color: bg.clone().lerp(new THREE.Color("#243150"), 0.5),
+        metalness: 0.5,
+        roughness: 0.62,
+      }),
     );
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -0.5;
     this.scene.add(ground);
     const grid = new THREE.GridHelper(6000, 80, this.accentColor.clone(), this.accentColor.clone());
     (grid.material as THREE.Material).transparent = true;
-    (grid.material as THREE.Material).opacity = 0.06;
+    (grid.material as THREE.Material).opacity = 0.12;
     grid.position.y = 0;
     this.scene.add(grid);
 
@@ -318,11 +327,12 @@ export class CityScene {
     }
     if (!geos.length) return;
     const mat = new THREE.MeshStandardMaterial({
-      color: this.cityColor,
-      metalness: 0.85,
-      roughness: 0.32,
-      envMapIntensity: 1.0,
-      emissive: this.accentColor.clone().multiplyScalar(0.06),
+      // контекст-застройка чуть светлее, чтобы город не сливался в черноту
+      color: this.cityColor.clone().lerp(new THREE.Color("#2a3a58"), 0.45),
+      metalness: 0.8,
+      roughness: 0.4,
+      envMapIntensity: 1.1,
+      emissive: this.accentColor.clone().multiplyScalar(0.12),
     });
     const mesh = new THREE.Mesh(mergeGeometries(geos, false), mat);
     this.scene.add(mesh);
@@ -339,13 +349,14 @@ export class CityScene {
     const piece = b.shape === "round" ? b.h : b.h / Math.max(1, b.tiers ?? 1);
     winTex.repeat.set(b.shape === "round" ? 4 : 1, Math.max(3, Math.round(piece / 16)));
     const mat = new THREE.MeshStandardMaterial({
-      color: this.towerColor.clone(),
-      metalness: 1.0,
-      roughness: 0.12,
-      envMapIntensity: 1.5,
+      // стекло чуть светлее и менее «зеркально-чёрное» — фасад читается ночью
+      color: this.towerColor.clone().lerp(new THREE.Color("#33486e"), 0.5),
+      metalness: 0.82,
+      roughness: 0.2,
+      envMapIntensity: 1.6,
       emissive: new THREE.Color(0xffffff),
       emissiveMap: winTex,
-      emissiveIntensity: 0.4,
+      emissiveIntensity: 0.55,
     });
     this.bodyMats.push(mat);
 
@@ -627,7 +638,7 @@ export class CityScene {
     for (const [id, mats] of this.towerMats) {
       const active = id === this.activeTower;
       const lit = this.highlighted.has(id);
-      const target = active ? 0.62 * pulse : lit ? 0.52 : 0.4;
+      const target = active ? 0.85 * pulse : lit ? 0.7 : 0.52;
       for (const m of mats) {
         m.emissiveIntensity += (target - m.emissiveIntensity) * 0.12;
       }
