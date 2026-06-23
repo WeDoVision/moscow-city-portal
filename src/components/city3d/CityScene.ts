@@ -220,6 +220,9 @@ export class CityScene {
   private cityColor: THREE.Color;
   private towerColor: THREE.Color;
   private accentColor: THREE.Color;
+  /** базовый «просто синий» и «ярко-синий» (для активной башни) */
+  private towerBase: THREE.Color;
+  private towerBright: THREE.Color;
   private windowTex: THREE.Texture;
   private composer!: EffectComposer;
   private bloom!: UnrealBloomPass;
@@ -234,6 +237,8 @@ export class CityScene {
     this.cityColor = new THREE.Color(cssToHex(colors.building, "#11151f"));
     this.towerColor = new THREE.Color(cssToHex(colors.tower, "#0b0f1a"));
     this.accentColor = new THREE.Color(cssToHex(colors.accent, "#4da2ff"));
+    this.towerBase = this.towerColor.clone().lerp(this.accentColor, 0.4); // «просто синий»
+    this.towerBright = this.accentColor.clone().lerp(new THREE.Color(0xffffff), 0.18); // «ярко-синий»
     this.windowTex = makeWindowTexture();
 
     this.renderer = new THREE.WebGLRenderer({
@@ -244,13 +249,13 @@ export class CityScene {
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.3;
+    this.renderer.toneMappingExposure = 1.05;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-    // фон чуть светлее «чернил», чтобы силуэты не тонули в черноте
-    const sceneBg = bg.clone().lerp(new THREE.Color("#1b2740"), 0.35);
+    // фон тёмный — акцент на синих башнях, а не на окружении
+    const sceneBg = bg.clone().lerp(new THREE.Color("#101726"), 0.18);
     this.scene.background = sceneBg.clone();
-    this.scene.fog = new THREE.FogExp2(sceneBg.clone(), 0.00022);
+    this.scene.fog = new THREE.FogExp2(sceneBg.clone(), 0.0003);
 
     // отражения окружения: ночной градиент (зенит-синь → свечение горизонта →
     // тёмная земля) через PMREM. Тёмное стекло начинает отражать «ночь», а не
@@ -269,16 +274,13 @@ export class CityScene {
     this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.32, 0.5, 0.62);
     this.composer.addPass(this.bloom);
 
-    // ── свет: холодная ночь + акцентный подсвет центра (поярче, чтобы фасады читались) ──
-    this.scene.add(new THREE.HemisphereLight(0xaecbf2, 0x0a1018, 1.0));
-    this.scene.add(new THREE.AmbientLight(0xffffff, 0.42));
-    const moon = new THREE.DirectionalLight(0xd2e2ff, 1.15);
+    // ── свет: тёмная ночь (окружение приглушено) + синий акцентный подсвет ──
+    this.scene.add(new THREE.HemisphereLight(0x8aa6d0, 0x070b12, 0.42));
+    this.scene.add(new THREE.AmbientLight(0xffffff, 0.16));
+    const moon = new THREE.DirectionalLight(0xbcd0f0, 0.6);
     moon.position.set(-700, 1100, -500);
     this.scene.add(moon);
-    const fill = new THREE.DirectionalLight(0xbcd0f0, 0.5);
-    fill.position.set(600, 500, 700);
-    this.scene.add(fill);
-    const glow = new THREE.PointLight(this.accentColor.clone(), 1.2, 2800, 1.3);
+    const glow = new THREE.PointLight(this.accentColor.clone(), 1.3, 2800, 1.3);
     glow.position.set(-120, 280, -160);
     this.scene.add(glow);
 
@@ -286,9 +288,9 @@ export class CityScene {
     const ground = new THREE.Mesh(
       new THREE.CircleGeometry(5000, 72),
       new THREE.MeshStandardMaterial({
-        color: bg.clone().lerp(new THREE.Color("#243150"), 0.5),
-        metalness: 0.5,
-        roughness: 0.62,
+        color: bg.clone().lerp(new THREE.Color("#1a2236"), 0.18),
+        metalness: 0.45,
+        roughness: 0.72,
       }),
     );
     ground.rotation.x = -Math.PI / 2;
@@ -296,7 +298,7 @@ export class CityScene {
     this.scene.add(ground);
     const grid = new THREE.GridHelper(6000, 80, this.accentColor.clone(), this.accentColor.clone());
     (grid.material as THREE.Material).transparent = true;
-    (grid.material as THREE.Material).opacity = 0.12;
+    (grid.material as THREE.Material).opacity = 0.07;
     grid.position.y = 0;
     this.scene.add(grid);
 
@@ -327,12 +329,12 @@ export class CityScene {
     }
     if (!geos.length) return;
     const mat = new THREE.MeshStandardMaterial({
-      // контекст-застройка чуть светлее, чтобы город не сливался в черноту
-      color: this.cityColor.clone().lerp(new THREE.Color("#2a3a58"), 0.45),
+      // контекст-застройка тёмная — фон для синих башен
+      color: this.cityColor.clone().lerp(new THREE.Color("#19223a"), 0.2),
       metalness: 0.8,
-      roughness: 0.4,
-      envMapIntensity: 1.1,
-      emissive: this.accentColor.clone().multiplyScalar(0.12),
+      roughness: 0.45,
+      envMapIntensity: 0.9,
+      emissive: this.accentColor.clone().multiplyScalar(0.05),
     });
     const mesh = new THREE.Mesh(mergeGeometries(geos, false), mat);
     this.scene.add(mesh);
@@ -349,14 +351,15 @@ export class CityScene {
     const piece = b.shape === "round" ? b.h : b.h / Math.max(1, b.tiers ?? 1);
     winTex.repeat.set(b.shape === "round" ? 4 : 1, Math.max(3, Math.round(piece / 16)));
     const mat = new THREE.MeshStandardMaterial({
-      // стекло чуть светлее и менее «зеркально-чёрное» — фасад читается ночью
-      color: this.towerColor.clone().lerp(new THREE.Color("#33486e"), 0.5),
-      metalness: 0.82,
-      roughness: 0.2,
-      envMapIntensity: 1.6,
-      emissive: new THREE.Color(0xffffff),
+      // башни — синие: тёмно-синее стекло + синее свечение окон (акцент темы).
+      // активная башня делается «ярко-синей» через emissiveIntensity (см. animate)
+      color: this.towerColor.clone().lerp(this.accentColor, 0.4),
+      metalness: 0.7,
+      roughness: 0.24,
+      envMapIntensity: 1.3,
+      emissive: this.accentColor.clone(),
       emissiveMap: winTex,
-      emissiveIntensity: 0.55,
+      emissiveIntensity: 0.6,
     });
     this.bodyMats.push(mat);
 
@@ -638,9 +641,13 @@ export class CityScene {
     for (const [id, mats] of this.towerMats) {
       const active = id === this.activeTower;
       const lit = this.highlighted.has(id);
-      const target = active ? 0.85 * pulse : lit ? 0.7 : 0.52;
+      // активная башня — ярко-синяя (сильное свечение + bloom), остальные — просто синие
+      const target = active ? 1.9 * pulse : lit ? 1.05 : 0.6;
+      const col = active ? this.towerBright : this.towerBase;
       for (const m of mats) {
         m.emissiveIntensity += (target - m.emissiveIntensity) * 0.12;
+        // активная башня окрашивается целиком в ярко-синий, остальные — в синий
+        m.color.lerp(col, 0.1);
       }
     }
 
