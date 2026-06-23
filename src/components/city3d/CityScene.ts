@@ -237,8 +237,8 @@ export class CityScene {
     this.cityColor = new THREE.Color(cssToHex(colors.building, "#11151f"));
     this.towerColor = new THREE.Color(cssToHex(colors.tower, "#0b0f1a"));
     this.accentColor = new THREE.Color(cssToHex(colors.accent, "#4da2ff"));
-    this.towerBase = this.towerColor.clone().lerp(this.accentColor, 0.4); // «просто синий»
-    this.towerBright = this.accentColor.clone().lerp(new THREE.Color(0xffffff), 0.18); // «ярко-синий»
+    this.towerBase = this.towerColor.clone().lerp(this.accentColor, 0.58); // «просто синий» (поярче)
+    this.towerBright = this.accentColor.clone().lerp(new THREE.Color(0xffffff), 0.22); // «ярко-синий»
     this.windowTex = makeWindowTexture();
 
     this.renderer = new THREE.WebGLRenderer({
@@ -329,12 +329,12 @@ export class CityScene {
     }
     if (!geos.length) return;
     const mat = new THREE.MeshStandardMaterial({
-      // контекст-застройка тёмная — фон для синих башен
-      color: this.cityColor.clone().lerp(new THREE.Color("#19223a"), 0.2),
+      // контекст-застройка — тёмная, но чуть ярче (фон для синих башен)
+      color: this.cityColor.clone().lerp(new THREE.Color("#26375a"), 0.4),
       metalness: 0.8,
       roughness: 0.45,
-      envMapIntensity: 0.9,
-      emissive: this.accentColor.clone().multiplyScalar(0.05),
+      envMapIntensity: 0.95,
+      emissive: this.accentColor.clone().multiplyScalar(0.08),
     });
     const mesh = new THREE.Mesh(mergeGeometries(geos, false), mat);
     this.scene.add(mesh);
@@ -353,7 +353,7 @@ export class CityScene {
     const mat = new THREE.MeshStandardMaterial({
       // башни — синие: тёмно-синее стекло + синее свечение окон (акцент темы).
       // активная башня делается «ярко-синей» через emissiveIntensity (см. animate)
-      color: this.towerColor.clone().lerp(this.accentColor, 0.4),
+      color: this.towerColor.clone().lerp(this.accentColor, 0.58),
       metalness: 0.7,
       roughness: 0.24,
       envMapIntensity: 1.3,
