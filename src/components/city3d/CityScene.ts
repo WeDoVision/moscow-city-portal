@@ -18,6 +18,10 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 
 export type CityBuilding = {
   p: [number, number][];
@@ -181,6 +185,8 @@ export class CityScene {
   private towerColor: THREE.Color;
   private accentColor: THREE.Color;
   private windowTex: THREE.Texture;
+  private composer!: EffectComposer;
+  private bloom!: UnrealBloomPass;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -208,7 +214,18 @@ export class CityScene {
     this.scene.background = bg.clone();
     this.scene.fog = new THREE.FogExp2(bg.clone(), 0.00035);
 
+    // отражения окружения: нейтральная «комната» через PMREM — тёмное стекло
+    // и металл начинают читаться как стекло/металл, а не матовый пластик
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
     this.camera = new THREE.PerspectiveCamera(50, 1, 5, 12000);
+
+    // постобработка: bloom заставляет окна светиться (ночной небоскрёб, sui.io)
+    this.composer = new EffectComposer(this.renderer);
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.9, 0.7, 0.18);
+    this.composer.addPass(this.bloom);
 
     // ── свет: холодная ночь + акцентный подсвет центра ──
     this.scene.add(new THREE.HemisphereLight(0x9fb8e0, 0x05070c, 0.55));
@@ -262,11 +279,10 @@ export class CityScene {
     if (!geos.length) return;
     const mat = new THREE.MeshStandardMaterial({
       color: this.cityColor,
-      metalness: 0.6,
-      roughness: 0.5,
-      transparent: true,
-      opacity: 0.92,
-      emissive: this.accentColor.clone().multiplyScalar(0.04),
+      metalness: 0.85,
+      roughness: 0.32,
+      envMapIntensity: 1.0,
+      emissive: this.accentColor.clone().multiplyScalar(0.06),
     });
     const mesh = new THREE.Mesh(mergeGeometries(geos, false), mat);
     this.scene.add(mesh);
@@ -281,11 +297,12 @@ export class CityScene {
     winTex.repeat.set(b.shape === "round" ? 6 : seg, Math.max(6, Math.round(b.h / 14)));
     const mat = new THREE.MeshStandardMaterial({
       color: this.towerColor.clone(),
-      metalness: 0.92,
-      roughness: 0.16,
+      metalness: 1.0,
+      roughness: 0.12,
+      envMapIntensity: 1.5,
       emissive: new THREE.Color(0xffffff),
       emissiveMap: winTex,
-      emissiveIntensity: 0.85,
+      emissiveIntensity: 0.8,
     });
     this.bodyMats.push(mat);
 
@@ -386,28 +403,39 @@ export class CityScene {
   private buildPath() {
     const ids = TOWER_ORDER.filter((id) => this.anchors.has(id));
     this.order = ids;
-    const cx = [...this.anchors.values()].reduce((s, a) => s + a.x, 0) / Math.max(1, this.anchors.size);
-    const cz = [...this.anchors.values()].reduce((s, a) => s + a.z, 0) / Math.max(1, this.anchors.size);
+    const all = ids.map((id) => this.anchors.get(id)!);
+    const cx = all.reduce((s, a) => s + a.x, 0) / Math.max(1, all.length);
+    const cz = all.reduce((s, a) => s + a.z, 0) / Math.max(1, all.length);
 
     // обзорная точка: высоко и позади центра
     this.overview = {
-      pos: new THREE.Vector3(cx + 250, 1050, cz + 1300),
-      tgt: new THREE.Vector3(cx, 120, cz),
+      pos: new THREE.Vector3(cx + 200, 1150, cz + 1250),
+      tgt: new THREE.Vector3(cx, 140, cz),
     };
 
     for (const id of ids) {
       const a = this.anchors.get(id)!;
       const H = this.displayHeight(id);
-      // направление «от центра к башне» по горизонтали → камера за башней,
-      // город остаётся на фоне силуэта
-      let dx = a.x - cx,
+      // камера ставится со стороны, ПРОТИВОПОЛОЖНОЙ «толпе» соседних башен:
+      // тогда между камерой и целью соседей нет, а они уходят на задний план.
+      const others = ids.filter((o) => o !== id).map((o) => this.anchors.get(o)!);
+      const ox = others.reduce((s, p) => s + p.x, 0) / Math.max(1, others.length);
+      const oz = others.reduce((s, p) => s + p.z, 0) / Math.max(1, others.length);
+      let dx = a.x - ox,
+        dz = a.z - oz;
+      let len = Math.hypot(dx, dz);
+      if (len < 1) {
+        // вырожденный случай — отходим от общего центра
+        dx = a.x - cx;
         dz = a.z - cz;
-      const len = Math.hypot(dx, dz) || 1;
+        len = Math.hypot(dx, dz) || 1;
+      }
       dx /= len;
       dz /= len;
-      const dist = H * 1.05 + 240;
-      const pos = new THREE.Vector3(a.x + dx * dist, H * 0.66 + 70, a.z + dz * dist);
-      const tgt = new THREE.Vector3(a.x, H * 0.5, a.z);
+      // ближе и выше: цель доминирует в кадре, соседи уходят вниз/за край
+      const dist = H * 0.8 + 150;
+      const pos = new THREE.Vector3(a.x + dx * dist, H * 0.95 + 60, a.z + dz * dist);
+      const tgt = new THREE.Vector3(a.x, H * 0.52, a.z);
       this.views.push({ pos, tgt });
     }
   }
@@ -493,6 +521,8 @@ export class CityScene {
 
   resize(w: number, h: number) {
     this.renderer.setSize(w, h, false);
+    this.composer.setSize(w, h);
+    this.bloom.setSize(w, h);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
   }
@@ -519,7 +549,7 @@ export class CityScene {
       }
     }
 
-    this.renderer.render(this.scene, this.camera);
+    this.composer.render();
   };
 
   dispose() {
