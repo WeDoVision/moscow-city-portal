@@ -18,7 +18,6 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
@@ -57,6 +56,12 @@ type Body = {
   dome?: boolean;
   /** «стопка» сдвинутых блоков (Город Столиц): число уровней */
   stack?: number;
+  /** число ступеней-сетбэков по высоте (силуэт супертолла, а не гладкая призма) */
+  tiers?: number;
+  /** тонкая мачта-антенна сверху, м */
+  antenna?: number;
+  /** скошенная корона сверху (наклон верхней грани, как у ОКО) */
+  slant?: boolean;
 };
 
 /**
@@ -64,26 +69,26 @@ type Body = {
  * Высоты — реальные (м), не из устаревшего OSM.
  */
 const TOWER_BODIES: Record<number, Body[]> = {
-  // Capital Towers — три круглые башни у воды
+  // Capital Towers — три круглые башни у воды, лёгкие сетбэки
   1: [
-    { shape: "round", r: 21, h: 295, taper: 0.92, ox: -46, oz: -4 },
-    { shape: "round", r: 21, h: 295, taper: 0.92, ox: 4, oz: 22 },
-    { shape: "round", r: 19, h: 158, taper: 0.95, ox: 48, oz: -12 },
+    { shape: "round", r: 21, h: 295, taper: 0.86, tiers: 6, ox: -46, oz: -4 },
+    { shape: "round", r: 21, h: 295, taper: 0.86, tiers: 6, ox: 4, oz: 22 },
+    { shape: "round", r: 19, h: 158, taper: 0.9, tiers: 4, ox: 48, oz: -12 },
   ],
-  // Neva Towers — две сужающиеся башни
+  // Neva Towers — две сужающиеся башни с мачтой
   104: [
-    { shape: "box", r: 27, h: 345, taper: 0.66, ox: -40, oz: -6 },
-    { shape: "box", r: 25, h: 302, taper: 0.68, ox: 42, oz: 16 },
+    { shape: "box", r: 27, h: 345, taper: 0.62, tiers: 6, antenna: 30, ox: -40, oz: -6 },
+    { shape: "box", r: 25, h: 302, taper: 0.66, tiers: 5, ox: 42, oz: 16 },
   ],
-  // ОКО — высокая жилая + офисная пониже
+  // ОКО — высокая жилая (скошенная корона) + офисная пониже
   107: [
-    { shape: "box", r: 29, h: 354, taper: 0.74, ox: -46, oz: -2 },
-    { shape: "box", r: 27, h: 245, taper: 0.8, ox: 50, oz: 22 },
+    { shape: "box", r: 29, h: 354, taper: 0.72, tiers: 6, slant: true, ox: -46, oz: -2 },
+    { shape: "box", r: 27, h: 245, taper: 0.78, tiers: 5, ox: 50, oz: 22 },
   ],
   // Федерация — две треугольные призмы + шпиль (Восток самый высокий)
   115: [
-    { shape: "tri", r: 33, h: 374, taper: 0.46, ox: -34, oz: 0, spire: 90 },
-    { shape: "tri", r: 30, h: 243, taper: 0.5, ox: 40, oz: 12 },
+    { shape: "tri", r: 33, h: 374, taper: 0.44, tiers: 7, spire: 90, ox: -34, oz: 0 },
+    { shape: "tri", r: 30, h: 243, taper: 0.48, tiers: 5, ox: 40, oz: 12 },
   ],
   // Город Столиц — две «стопки» сдвинутых блоков (Москва выше, Петербург)
   558: [
@@ -91,9 +96,9 @@ const TOWER_BODIES: Record<number, Body[]> = {
     { shape: "box", r: 24, h: 257, ox: 34, oz: 14, stack: 4 },
   ],
   // Империя — башня со скруглённой вершиной
-  503: [{ shape: "round", r: 27, h: 239, taper: 0.86, dome: true }],
-  // Дом Дау — одиночный слим-небоскрёб
-  69: [{ shape: "box", r: 23, h: 340, taper: 0.6 }],
+  503: [{ shape: "round", r: 27, h: 239, taper: 0.82, tiers: 5, dome: true }],
+  // Дом Дау — одиночный слим-небоскрёб с мачтой
+  69: [{ shape: "box", r: 23, h: 340, taper: 0.56, tiers: 7, antenna: 28 }],
 };
 
 /** Реальные glTF-модели (по slug). Пусто → используется крафт-силуэт. */
@@ -157,6 +162,37 @@ function makeWindowTexture(): THREE.Texture {
   return tex;
 }
 
+/** Ночной градиент-HDRI (equirect) для отражений стекла: синь зенита →
+ *  свечение горизонта (акцент) → тёмная земля + редкие огни города. */
+function makeNightEnv(accent: THREE.Color): THREE.Texture {
+  const w = 512,
+    h = 256;
+  const cv = document.createElement("canvas");
+  cv.width = w;
+  cv.height = h;
+  const ctx = cv.getContext("2d")!;
+  const g = ctx.createLinearGradient(0, 0, 0, h);
+  g.addColorStop(0, "#16223a"); // зенит
+  g.addColorStop(0.5, "#0b1322");
+  g.addColorStop(0.6, `#${accent.clone().multiplyScalar(0.5).getHexString()}`); // свечение горизонта
+  g.addColorStop(0.66, "#0a0e16");
+  g.addColorStop(1, "#05070c"); // земля
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, h);
+  // редкие огни города у линии горизонта — оживляют отражения
+  let s = 7;
+  const rnd = () => ((s = (s * 1103515245 + 12345) & 0x7fffffff), s / 0x7fffffff);
+  for (let i = 0; i < 240; i++) {
+    const y = h * (0.58 + rnd() * 0.1);
+    ctx.fillStyle = `rgba(${150 + (rnd() * 80) | 0},${180 + (rnd() * 60) | 0},255,${0.25 + rnd() * 0.4})`;
+    ctx.fillRect(rnd() * w, y, 1.4, 1.4);
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.mapping = THREE.EquirectangularReflectionMapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 type ViewKF = { pos: THREE.Vector3; tgt: THREE.Vector3 };
 
 export class CityScene {
@@ -214,10 +250,13 @@ export class CityScene {
     this.scene.background = bg.clone();
     this.scene.fog = new THREE.FogExp2(bg.clone(), 0.00035);
 
-    // отражения окружения: нейтральная «комната» через PMREM — тёмное стекло
-    // и металл начинают читаться как стекло/металл, а не матовый пластик
+    // отражения окружения: ночной градиент (зенит-синь → свечение горизонта →
+    // тёмная земля) через PMREM. Тёмное стекло начинает отражать «ночь», а не
+    // студийную комнату — глянец читается как ночной фасад.
     const pmrem = new THREE.PMREMGenerator(this.renderer);
-    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    const envTex = makeNightEnv(this.accentColor);
+    this.scene.environment = pmrem.fromEquirectangular(envTex).texture;
+    envTex.dispose();
 
     this.camera = new THREE.PerspectiveCamera(50, 1, 5, 12000);
 
@@ -295,7 +334,10 @@ export class CityScene {
     const group = new THREE.Group();
     const winTex = this.windowTex.clone();
     winTex.needsUpdate = true;
-    winTex.repeat.set(b.shape === "round" ? 6 : seg, Math.max(6, Math.round(b.h / 14)));
+    // окна тайлятся по корпусу; для ступенчатых башен V считаем по высоте ступени,
+    // иначе на каждой ступени (она маппит V 0..1) окна были бы слишком частыми
+    const piece = b.shape === "round" ? b.h : b.h / Math.max(1, b.tiers ?? 1);
+    winTex.repeat.set(b.shape === "round" ? 4 : 1, Math.max(3, Math.round(piece / 16)));
     const mat = new THREE.MeshStandardMaterial({
       color: this.towerColor.clone(),
       metalness: 1.0,
@@ -322,12 +364,30 @@ export class CityScene {
         group.add(m);
       }
     } else {
-      const rTop = b.r * (b.taper ?? 0.8);
-      const geo = new THREE.CylinderGeometry(rTop, b.r, b.h, seg, 1, false);
-      if (b.shape === "box") geo.rotateY(Math.PI / 4);
-      const m = new THREE.Mesh(geo, mat);
-      m.position.y = b.h / 2;
-      group.add(m);
+      const taper = b.taper ?? 0.8;
+      const rTop = b.r * taper;
+      const rot = b.shape === "tri" ? Math.PI / 6 : Math.PI / 4;
+
+      if (b.shape === "round") {
+        // гладкая сужающаяся башня (Capital/Империя)
+        const geo = new THREE.CylinderGeometry(rTop, b.r, b.h, 30, 1, false);
+        const m = new THREE.Mesh(geo, mat);
+        m.position.y = b.h / 2;
+        group.add(m);
+      } else {
+        // ступенчатый силуэт супертолла (box/tri): сетбэки по высоте,
+        // каждая ступень уже предыдущей → читаются «этажи/уступы», не коробка
+        const tiers = Math.max(2, b.tiers ?? 4);
+        const tierH = b.h / tiers;
+        for (let i = 0; i < tiers; i++) {
+          const r = b.r * (1 - (1 - taper) * (i / (tiers - 1)));
+          const geo = new THREE.CylinderGeometry(r, r, tierH * 1.012, seg, 1, false);
+          geo.rotateY(rot);
+          const m = new THREE.Mesh(geo, mat);
+          m.position.y = tierH * (i + 0.5);
+          group.add(m);
+        }
+      }
 
       if (b.dome) {
         const dome = new THREE.Mesh(
@@ -336,6 +396,29 @@ export class CityScene {
         );
         dome.position.y = b.h;
         group.add(dome);
+      }
+      if (b.slant) {
+        // скошенная корона (как срез у ОКО): призма с наклонённой верхней гранью
+        const cap = new THREE.CylinderGeometry(rTop * 0.7, rTop, rTop * 1.5, seg, 1, false);
+        cap.rotateY(rot);
+        const cm = new THREE.Mesh(cap, mat);
+        cm.position.y = b.h + rTop * 0.55;
+        cm.rotation.z = 0.22;
+        group.add(cm);
+      }
+      if (b.antenna) {
+        const ant = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.6, 1.6, b.antenna, 6),
+          new THREE.MeshStandardMaterial({
+            color: this.towerColor.clone(),
+            metalness: 0.95,
+            roughness: 0.35,
+            emissive: this.accentColor.clone(),
+            emissiveIntensity: 0.4,
+          }),
+        );
+        ant.position.y = b.h + b.antenna / 2;
+        group.add(ant);
       }
       if (b.spire) {
         const spireMat = new THREE.MeshStandardMaterial({
