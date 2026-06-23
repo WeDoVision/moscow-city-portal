@@ -63,11 +63,11 @@ function ColorField({
   onChange,
 }: {
   label: string;
-  value: string;
+  value: string | undefined;
   onChange: (v: string) => void;
 }) {
   const [hex, setHex] = useState("#000000");
-  useEffect(() => setHex(toHex(value)), [value]);
+  useEffect(() => setHex(toHex(value ?? "")), [value]);
   return (
     <div className="text-[13px] text-paper/70">
       {label}
@@ -118,7 +118,7 @@ function MapColorsEditor({
           onChange={(e) =>
             onChange(
               e.target.checked
-                ? Object.fromEntries(MAP_COLOR_FIELDS.map((f) => [f.key, theme[f.themeKey]]))
+                ? Object.fromEntries(MAP_COLOR_FIELDS.map((f) => [f.key, theme[f.themeKey] ?? ""]))
                 : undefined,
             )
           }
@@ -132,7 +132,7 @@ function MapColorsEditor({
             <ColorField
               key={f.key}
               label={f.label}
-              value={colors?.[f.key] || theme[f.themeKey]}
+              value={colors?.[f.key] || theme[f.themeKey] || ""}
               onChange={(v) => onChange({ ...colors, [f.key]: v })}
             />
           ))}
