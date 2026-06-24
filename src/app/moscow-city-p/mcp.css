@@ -1,0 +1,226 @@
+/*
+ * Scoped-стили /moscow-city-p (.mcp). Визуальный язык sui.io:
+ * монохром (почти-чёрный + белый) с одним ярким синим акцентом,
+ * чередование светлых и тёмных секций, моноширинные метки,
+ * blur-спотлайт герой, пунктирные разделители, скролл-таймлайн.
+ * Геометрия — прямоугольная (без скруглений).
+ */
+.mcp {
+  --ink: #0a0a0b;
+  --ink-2: #111214;
+  --paper: #ffffff;
+  --paper-2: #eef0f3;       /* светло-серая панель списка */
+  --blue: #1aa3ff;
+  --blue-soft: #4da2ff;
+  --on-dark: #f4f7fb;
+  --on-dark-mut: #98a0aa;
+  --on-light: #0a0a0b;
+  --on-light-mut: #555c66;
+  --line-dark: rgba(255, 255, 255, 0.12);
+  --line-light: rgba(10, 10, 11, 0.16);
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+
+  background: var(--ink);
+  color: var(--on-dark);
+  font-family: var(--font-inter), var(--font-manrope), system-ui, sans-serif;
+  min-height: 100vh;
+  /* clip (а не hidden): hidden делает .mcp scroll-контейнером и ломает
+     position:sticky у хедера — с clip навбар липнет к окну на всех секциях */
+  overflow-x: clip;
+  letter-spacing: -0.015em;
+}
+.mcp ::selection { background: var(--blue); color: #fff; }
+
+/* Прямоугольная геометрия: обнуляем любые скругления Tailwind */
+.mcp [class*="rounded"] { border-radius: 0 !important; }
+
+.mcp-mono { font-family: var(--mono); letter-spacing: 0; }
+
+.mcp-dark { background: var(--ink); color: var(--on-dark); }
+.mcp-light { background: var(--paper); color: var(--on-light); }
+.mcp-light .mcp-mut { color: var(--on-light-mut); }
+.mcp-dark .mcp-mut { color: var(--on-dark-mut); }
+
+/* пунктир-разделители: крупные точки с заметным шагом (радиальный градиент).
+   Цвет точек берётся из --dotc (тёмный для светлых секций, светлый для тёмных). */
+.mcp { --dotc: var(--line-light); }
+.mcp-dark { --dotc: var(--line-dark); }
+.mcp-dotted-b, .mcp-dotted-t {
+  border: 0; background-repeat: repeat-x;
+  background-image: radial-gradient(circle, var(--dotc) 1.7px, transparent 2px);
+  background-size: 15px 4px;
+}
+.mcp-dotted-b { background-position: left bottom; }
+.mcp-dotted-t { background-position: left top; }
+.mcp-dotted-y {
+  border: 0; background-repeat: repeat-x, repeat-x;
+  background-image: radial-gradient(circle, var(--dotc) 1.7px, transparent 2px), radial-gradient(circle, var(--dotc) 1.7px, transparent 2px);
+  background-size: 15px 4px, 15px 4px; background-position: left top, left bottom;
+}
+/* вертикальные точечные линии — только на md+ (рамка из двух колонок) */
+@media (min-width: 768px) {
+  .mcp-dlm-l, .mcp-dlm-r, .mcp-dlm-lr { background-repeat: repeat-y; }
+  .mcp-dlm-l { background-image: radial-gradient(circle, var(--dotc) 1.7px, transparent 2px); background-size: 4px 15px; background-position: left top; }
+  .mcp-dlm-r { background-image: radial-gradient(circle, var(--dotc) 1.7px, transparent 2px); background-size: 4px 15px; background-position: right top; }
+  .mcp-dlm-lr {
+    background-image: radial-gradient(circle, var(--dotc) 1.7px, transparent 2px), radial-gradient(circle, var(--dotc) 1.7px, transparent 2px);
+    background-size: 4px 15px, 4px 15px; background-repeat: repeat-y, repeat-y; background-position: left top, right top;
+  }
+}
+
+/* кнопки (прямоугольные) */
+.mcp-btn-black { background: #0a0a0b; color: #fff; font-weight: 600; transition: transform .18s, background .18s; }
+.mcp-btn-black:hover { background: #23262b; transform: translateY(-1px); }
+.mcp-btn-white { background: #fff; color: #0a0a0b; font-weight: 600; border: 1px solid var(--line-dark); transition: transform .18s, background .18s; }
+.mcp-btn-white:hover { background: #e6eaef; transform: translateY(-1px); }
+.mcp-btn-blue { background: var(--blue); color: #fff; font-weight: 600; transition: transform .18s, filter .18s; }
+.mcp-btn-blue:hover { filter: brightness(1.08); transform: translateY(-1px); }
+
+/* «+» бокс в навигации */
+.mcp-plus { display: inline-grid; place-items: center; width: 18px; height: 18px; background: rgba(255,255,255,.1); font-size: 13px; line-height: 1; color: var(--on-dark-mut); transition: background .2s, color .2s, transform .2s; }
+.mcp-navitem:hover .mcp-plus { background: var(--blue); color: #fff; transform: rotate(90deg); }
+
+/* ─ Hero: весь фон (сетка + заголовок) заблюрен, резкость в круге под курсором.
+   Три полноразмерных слоя поверх градиента → нет видимой «рамки» блок-блюра. ─ */
+.mcp-hero {
+  position: relative;
+  overflow-x: clip;
+  overflow-y: visible;
+  /* фон поднят и осветлён: меньше тёмного сверху, больше синего */
+  background:
+    radial-gradient(155% 130% at 50% 142%, #e2f0ff 0%, #8ec3f8 30%, #4584cf 55%, #21518f 76%, #0e2b54 90%, var(--ink) 100%);
+}
+.mcp-hero-layer {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 5rem 0.625rem 7rem; text-align: center; pointer-events: none;
+}
+.mcp-hero-blur { filter: blur(8px); }
+.mcp-hero-sharp {
+  -webkit-mask-image: radial-gradient(circle var(--r, 340px) at var(--mx, 50%) var(--my, 46%), #000 0 56%, transparent 100%);
+  mask-image: radial-gradient(circle var(--r, 340px) at var(--mx, 50%) var(--my, 46%), #000 0 56%, transparent 100%);
+}
+.mcp-hero-fg { justify-content: flex-end; padding-bottom: 3rem; }
+.mcp-hero-fg .mcp-hero-int { pointer-events: auto; }
+.mcp-hero-word {
+  font-weight: 700; letter-spacing: -0.045em; line-height: 0.82;
+  color: #eef6ff; margin: 0; text-shadow: 0 0 60px rgba(150, 200, 255, 0.45);
+}
+@media (prefers-reduced-motion: reduce) {
+  .mcp-hero-blur { filter: none; }
+  .mcp-hero-sharp { -webkit-mask-image: none; mask-image: none; }
+}
+
+/* reveal + stagger */
+.mcp-reveal { opacity: 0; transform: translateY(30px); transition: opacity .8s cubic-bezier(.22,1,.36,1), transform .8s cubic-bezier(.22,1,.36,1); }
+.mcp-reveal.in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .mcp-reveal { opacity: 1; transform: none; transition: none; } }
+
+/* подсветка слова: чёрная заливка едет слева направо, привязана к скроллу.
+   Ширина управляется переменной --p (0..1), которую ставит JS по позиции
+   секции во вьюпорте — скроллишь вниз/вверх, заливка растёт/уменьшается. */
+.mcp-hl { position: relative; display: inline-block; padding: 0 .14em; white-space: nowrap; }
+.mcp-hl-fill {
+  position: absolute; inset: 0; padding: inherit;
+  background: #0a0a0b; color: #fff; white-space: nowrap;
+  clip-path: inset(0 calc((1 - var(--p, 0)) * 100%) 0 0);
+}
+@media (prefers-reduced-motion: reduce) { .mcp-hl-fill { --p: 1; } }
+
+/* светло-серая панель списка — фон на всю ширину экрана */
+.mcp-panel { background: var(--paper-2); }
+
+/* каретка печатной анимации */
+.mcp-caret { display: inline-block; margin-left: .04em; color: var(--blue); animation: mcp-blink 1s steps(1) infinite; }
+.mcp-caret-done { animation: none; opacity: 0; }
+@keyframes mcp-blink { 0%, 50% { opacity: 1; } 50.01%, 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .mcp-caret { display: none; } }
+
+/* editorial-строки: лёгкий сдвиг вправо при наведении (через transform,
+   чтобы не конфликтовать с базовым padding-left ряда) */
+.mcp-row { transition: transform .35s ease; }
+.mcp-row:hover { transform: translateX(14px); }
+.mcp-iconbox { background: var(--blue); color: #fff; }
+
+/* marquee логотипов */
+.mcp-marquee { display: flex; gap: 4rem; width: max-content; animation: mcp-scroll 36s linear infinite; }
+.mcp-marquee:hover { animation-play-state: paused; }
+@keyframes mcp-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) { .mcp-marquee { animation: none; } }
+
+/* индустрии — карточки */
+.mcp-icard { background: var(--ink-2); border: 1px solid var(--line-dark); transition: border-color .3s, background .3s; }
+.mcp-icard:hover { border-color: rgba(26,163,255,.5); background: #14161a; }
+
+/* кнопка «Смотреть…»: при наведении плавно заливается синим слева направо */
+.mcp-explore {
+  position: relative; display: flex; align-items: stretch;
+  border: 1px solid var(--line-dark);
+  background-image: linear-gradient(var(--blue), var(--blue));
+  background-repeat: no-repeat; background-position: left center; background-size: 0% 100%;
+  transition: background-size .35s ease, border-color .35s ease;
+}
+/* заливка кнопки запускается при наведении на ВСЮ карточку */
+.mcp-icard:hover .mcp-explore { background-size: 100% 100%; border-color: var(--blue); }
+.mcp-explore .mcp-explore-ar { background: var(--blue); color: #fff; }
+.mcp-explore .mcp-explore-lb { position: relative; color: #fff; }
+
+/* карточка-башня таймлайна */
+.mcp-tower { background: #0d0e10; border: 1px solid var(--line-dark); transition: border-color .4s, transform .4s; }
+.mcp-tower:hover { border-color: rgba(26,163,255,.55); transform: translateY(-4px); }
+.mcp-tower img { transition: transform .8s ease; }
+.mcp-tower:hover img { transform: scale(1.06); }
+/* медиа карточки свёрнуто, раскрывается когда строка доскроллена до центра
+   (класс mcp-tower-open ставит отдельный observer со строгим rootMargin) */
+.mcp-tower-media { max-height: 0; opacity: 0; overflow: hidden; transition: max-height .8s cubic-bezier(.6,0,.2,1), opacity .6s ease .1s; }
+.mcp-tower-open .mcp-tower-media { max-height: 460px; opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .mcp-tower-media { max-height: 460px; opacity: 1; transition: none; } }
+
+/* секция «Начать»: строки с hover-раскрытием (фон + иконка + кнопка) */
+.mcp-start-row { position: relative; transition: background .35s ease; }
+.mcp-start-row:hover { background: #16181c; }
+.mcp-start-dot { position: absolute; left: 0; top: -4px; width: 8px; height: 8px; background: var(--blue); }
+.mcp-start-ico {
+  display: grid; place-items: center; flex-shrink: 0;
+  background: var(--blue); color: #fff; height: 64px;
+  width: 0; opacity: 0; overflow: hidden;
+  transition: width .4s cubic-bezier(.6,0,.25,1), opacity .35s ease, margin-right .4s cubic-bezier(.6,0,.25,1);
+  margin-right: 0;
+}
+.mcp-start-row:hover .mcp-start-ico { width: 64px; opacity: 1; margin-right: 1.25rem; }
+.mcp-start-cta {
+  max-height: 0; opacity: 0; overflow: hidden; margin-top: 0;
+  transition: max-height .45s cubic-bezier(.6,0,.25,1), opacity .35s ease, margin-top .45s cubic-bezier(.6,0,.25,1);
+}
+.mcp-start-row:hover .mcp-start-cta { max-height: 72px; opacity: 1; margin-top: 1.25rem; }
+/* на тач-экранах без hover показываем кнопку и иконку всегда */
+@media (hover: none), (max-width: 767px) {
+  .mcp-start-ico { width: 52px; opacity: 1; margin-right: 1rem; }
+  .mcp-start-cta { max-height: 72px; opacity: 1; margin-top: 1rem; }
+}
+
+/* faq */
+.mcp-faq-a { max-height: 0; overflow: hidden; opacity: 0; transition: max-height .45s, opacity .35s; }
+.mcp-faq[data-open="true"] .mcp-faq-a { max-height: 320px; opacity: 1; }
+.mcp-faq[data-open="true"] .mcp-faq-chev { transform: rotate(45deg); }
+.mcp-faq-chev { transition: transform .3s; }
+
+/* вертикальная пунктирная линия таймлайна */
+.mcp-tl-line { background-image: linear-gradient(var(--line-dark) 60%, transparent 0); background-size: 1px 8px; background-repeat: repeat-y; }
+/* бегущий маркер по линии — двигается по скроллу (--rp: 0..1) */
+.mcp-tl-runner {
+  position: absolute; left: 50%; top: calc(var(--rp, 0) * 100%);
+  width: 12px; height: 12px; background: var(--blue);
+  transform: translate(-50%, -50%) rotate(45deg);
+  box-shadow: 0 0 18px rgba(26, 163, 255, .9);
+}
+/* узел напротив ШАПКИ карточки (не центра) — не съезжает при раскрытии медиа */
+.mcp-tl-node {
+  position: absolute; left: 50%; top: 26px; transform: translate(-50%, -50%);
+  width: 9px; height: 9px; background: var(--ink); border: 1px solid var(--blue);
+}
+/* короткий горизонтальный коннектор от узла к шапке карточки */
+.mcp-tl-stub { position: absolute; top: 26px; height: 0; border-top: 1px dotted var(--line-dark); width: 1.75rem; }
+
+/* canvas-переход синий→чёрный */
+.mcp-canvas { display: block; width: 100%; height: 100%; }
