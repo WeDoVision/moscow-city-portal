@@ -117,6 +117,11 @@ select:focus-visible {
 .portal-scope {
   background-image: var(--bg-gradient, none);
   background-attachment: fixed;
+  /* Основной шрифт текста берём из токена темы НА УРОВНЕ скоупа: правило
+   * font-family на <body> вычисляет var(--font-sans) с корневым значением,
+   * поэтому переопределение темы (fontBody) должно применяться здесь —
+   * иначе текст портала наследует шрифт body, а не шрифт портала. */
+  font-family: var(--font-sans);
 }
 
 /* Bouncy-переходы: все transition-* внутри портала берут кривую темы
