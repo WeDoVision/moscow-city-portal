@@ -31,9 +31,9 @@
     "btnDarkInk": "oklch(0.985 0.004 250)",
     "btnLightBg": "oklch(0.985 0.004 250)",
     "btnLightInk": "oklch(0.145 0.03 256)",
-    "fontDisplay": "Onest",
-    "fontBody": "Onest",
-    "fontUrl": "https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&subset=cyrillic,latin&display=swap"
+    "fontDisplay": "Jost",
+    "fontBody": "Jost",
+    "fontUrl": "https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&display=swap"
   },
   "scope": {
     "deal": "sale",
