@@ -420,8 +420,25 @@ function TowerTile({ t }: { t: TowerCard }) {
 /* Светлая секция — две колонки в точечной рамке (как у sui) */
 function Builders() {
   const cols = [builders.left, builders.right];
+  const ref = useRef<HTMLElement>(null);
+  // Выравниваем высоту двух заголовков → одинаковое число строк на любой ширине.
+  useEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+    const eq = () => {
+      const hs = root.querySelectorAll<HTMLHeadingElement>("h2");
+      hs.forEach((h) => { h.style.minHeight = ""; });
+      let max = 0;
+      hs.forEach((h) => { max = Math.max(max, h.offsetHeight); });
+      hs.forEach((h) => { h.style.minHeight = `${max}px`; });
+    };
+    eq();
+    window.addEventListener("resize", eq, { passive: true });
+    document.fonts?.ready?.then(eq).catch(() => {});
+    return () => window.removeEventListener("resize", eq);
+  }, []);
   return (
-    <section id="builders" className="mcp-light scroll-mt-16 py-20 md:py-28">
+    <section ref={ref} id="builders" className="mcp-light scroll-mt-16 py-20 md:py-28">
       <div className="mcp-reveal mx-auto max-w-[1800px] px-2.5">
         <div className="mcp-dotted-t grid md:grid-cols-2">
           {cols.map((c, i) => (
@@ -431,10 +448,8 @@ function Builders() {
                 i === 0 ? "mcp-dotted-b mcp-dlm-lr" : "mcp-dlm-r"
               }`}
             >
-              <h2 className="text-6xl font-bold leading-[1.04] tracking-tight md:text-7xl">
-                {c.title.split("\n").map((line) => (
-                  <span key={line} className="block whitespace-nowrap">{line}</span>
-                ))}
+              <h2 className="text-6xl font-bold leading-[1.04] tracking-tight [text-wrap:balance] md:text-7xl">
+                {c.title.replace(/\n/g, " ")}
               </h2>
               <div className="mt-16 space-y-4 md:mt-28">
                 {c.points.map((p) => (
