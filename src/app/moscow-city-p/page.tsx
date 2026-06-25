@@ -3,12 +3,13 @@ import "./mcp.css";
 import { SuiClone } from "./SuiClone";
 import { brand, toolkit, faq } from "./data";
 import { portal } from "@/portal.config";
-import { fetchComplexes, imageUrl } from "@/lib/whitewill/client";
+import { fetchComplexes, fetchLots, imageUrl } from "@/lib/whitewill/client";
 
 // Статика с фоновым обновлением — фото башен из API не протухают.
 export const revalidate = 600;
 
 export type TowerCard = {
+  id: number;
   num: string;
   name: string;
   tagline: string;
@@ -40,13 +41,17 @@ export const metadata: Metadata = {
 };
 
 export default async function MoscowCityClonePage() {
-  const complexes = await fetchComplexes().catch(() => []);
+  const [complexes, lots] = await Promise.all([
+    fetchComplexes().catch(() => []),
+    fetchLots({ deal: "sale", page: 1 }),
+  ]);
   const byId = new Map(complexes.map((c) => [c.id, c]));
 
   const towers: TowerCard[] = portal.towers.map((t, i) => {
     const cx = byId.get(t.id);
     const img = cx?.images?.[0];
     return {
+      id: t.id,
       num: String(i + 1).padStart(2, "0"),
       name: t.name,
       tagline: t.tagline,
@@ -95,7 +100,7 @@ export default async function MoscowCityClonePage() {
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-      <SuiClone towers={towers} />
+      <SuiClone towers={towers} lots={lots} />
     </>
   );
 }

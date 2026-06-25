@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import {
   brand, announce, nav, hero, partners, integrity,
-  toolkit, builders, industries, start, newsletter, faq, footerCols,
+  toolkit, builders, industries, start, catalog, faq, footerCols,
 } from "./data";
 import type { TowerCard } from "./page";
+import type { LotFilterResult } from "@/lib/whitewill/types";
+import { Search } from "./Search";
 
 function useReveal() {
   useEffect(() => {
@@ -388,6 +390,16 @@ function Toolkit({ towers = [] }: { towers?: TowerCard[] }) {
   );
 }
 function TowerTile({ t }: { t: TowerCard }) {
+  // «Смотреть лоты» — фильтруем каталог по этой башне и скроллим к поиску.
+  // span role=button (а не <button>), чтобы не вкладывать кнопку в <a>.
+  const showLots = (e: React.SyntheticEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    window.dispatchEvent(
+      new CustomEvent("portal:applyFilters", { detail: { towers: [t.id] } }),
+    );
+    document.getElementById("search")?.scrollIntoView({ behavior: "smooth" });
+  };
   return (
     <a href={t.href} className="mcp-tower group relative z-10 block">
       <div className="flex items-center gap-3 border-b border-[var(--line-dark)] px-4 py-3">
@@ -403,7 +415,7 @@ function TowerTile({ t }: { t: TowerCard }) {
             <div className="h-full w-full bg-gradient-to-br from-[#0b2c63] to-[#06122a]" />
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0b] via-transparent to-transparent" />
-          <span className="absolute bottom-3 right-3 mcp-mono bg-[#1aa3ff] px-2 py-1 text-[11px] font-semibold text-white">{t.tagline.match(/\d+\s?м/)?.[0] ?? ""}</span>
+          <span className="absolute bottom-3 right-3 mcp-mono bg-[#0a0a0b]/70 px-2 py-1 text-[11px] font-medium text-white/90 backdrop-blur">{t.tagline.match(/\d+\s?м/)?.[0] ?? ""}</span>
         </div>
       </div>
       <div className="flex items-center justify-between gap-3 border-t border-[var(--line-dark)] px-4 py-4">
@@ -411,7 +423,15 @@ function TowerTile({ t }: { t: TowerCard }) {
           <span className="grid h-8 w-8 place-items-center border border-[var(--line-dark)] text-lg font-bold text-[#4da2ff]">{t.logo}</span>
           <span className="text-xl font-semibold text-white">{t.name}</span>
         </div>
-        <span className="mcp-mono text-[#1aa3ff] opacity-0 transition-opacity group-hover:opacity-100">→</span>
+        <span
+          role="button"
+          tabIndex={0}
+          onClick={showLots}
+          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && showLots(e)}
+          className="mcp-btn-blue mcp-mono inline-flex shrink-0 items-center gap-1.5 px-4 py-2 text-[11px] tracking-wide"
+        >
+          Смотреть лоты <span aria-hidden>→</span>
+        </span>
       </div>
     </a>
   );
@@ -536,7 +556,7 @@ function Start() {
       <div className="mx-auto max-w-[1800px] px-2.5">
         <p className="mcp-reveal mcp-mono mb-10 text-sm uppercase tracking-[0.25em] text-[#1aa3ff]">{start.eyebrow}</p>
         <div className="mcp-reveal mcp-dotted-t">
-          {start.rows.map((r) => (
+          {start.rows.map((r, i) => (
             <div key={r.title} className="mcp-start-row mcp-dotted-b grid items-start gap-y-3 px-2 py-8 md:grid-cols-2 md:px-4 md:py-10">
               <span className="mcp-start-dot" aria-hidden />
               <div className="flex items-center">
@@ -547,12 +567,22 @@ function Start() {
               </div>
               <div>
                 <p className="max-w-md text-lg text-[var(--on-dark-mut)] md:text-xl">{r.desc}</p>
-                <a href={r.href || brand.telegram} className="mcp-start-cta flex">
-                  <span className="mcp-btn-blue flex w-full items-center gap-3 px-4 py-3 text-lg">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                    {r.cta}
-                  </span>
-                </a>
+                {/* кнопка только у первого пункта — скроллит к поиску */}
+                {i === 0 && (
+                  <a
+                    href="#search"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      document.getElementById("search")?.scrollIntoView({ behavior: "smooth" });
+                    }}
+                    className="mcp-start-cta flex"
+                  >
+                    <span className="mcp-btn-blue flex w-full items-center gap-3 px-4 py-3 text-lg">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                      {r.cta}
+                    </span>
+                  </a>
+                )}
               </div>
             </div>
           ))}
@@ -562,22 +592,28 @@ function Start() {
   );
 }
 
-function Newsletter() {
+function CatalogCta() {
   return (
     <section className="mcp-dark border-t border-[var(--line-dark)] py-24 text-center md:py-32">
       <div className="mx-auto max-w-4xl px-5">
+        <p className="mcp-reveal mcp-mono mb-5 text-xs uppercase tracking-[0.3em] text-[#1aa3ff]">Каталог /</p>
         <h2 className="mcp-reveal flex flex-nowrap items-center justify-center gap-x-3 whitespace-nowrap text-4xl font-bold tracking-tight sm:text-6xl md:text-7xl">
-          Оставайтесь
+          {catalog.title}
           <span className="inline-grid h-14 w-14 shrink-0 place-items-center bg-[#1aa3ff] align-middle sm:h-[4.5rem] sm:w-[4.5rem]">
-            <svg width="42" height="42" viewBox="0 0 24 24" fill="none"><path d="M6 9a6 6 0 0112 0c0 5 2 6 2 6H4s2-1 2-6zM10 19a2 2 0 004 0" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            <svg width="42" height="42" viewBox="0 0 24 24" fill="none"><path d="M12 4v10m0 0l-4-4m4 4l4-4M5 19h14" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </span>
-          в курсе
+          {catalog.titleRest}
         </h2>
-        <p className="mcp-reveal mt-6 text-lg text-[var(--on-dark-mut)] md:text-lg">{newsletter.sub}</p>
+        <p className="mcp-reveal mx-auto mt-6 max-w-2xl text-lg text-[var(--on-dark-mut)] md:text-lg">{catalog.sub}</p>
         <form className="mcp-reveal mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center" onSubmit={(e) => e.preventDefault()}>
           <input type="email" required placeholder="you@email.com" className="mcp-mono w-full rounded-lg border border-[var(--line-dark)] bg-[#111214] px-4 py-3 text-lg text-white outline-none placeholder:text-[#5a626c] focus:border-[#1aa3ff] sm:w-72" />
-          <button className="mcp-btn-blue px-6 py-3 text-lg">Подписаться</button>
+          <button className="mcp-btn-blue inline-flex items-center justify-center gap-2 px-6 py-3 text-lg">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden><path d="M12 4v10m0 0l-4-4m4 4l4-4M5 19h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            {catalog.cta}
+          </button>
         </form>
+        <p className="mcp-reveal mcp-mono mt-4 text-xs text-[#5a626c]">{catalog.meta}</p>
+        <p className="mcp-reveal mt-2 text-xs text-[#5a626c]">{catalog.consent}</p>
       </div>
     </section>
   );
@@ -642,7 +678,7 @@ function Footer() {
   );
 }
 
-export function SuiClone({ towers }: { towers: TowerCard[] }) {
+export function SuiClone({ towers, lots }: { towers: TowerCard[]; lots: LotFilterResult }) {
   const [bar, setBar] = useState(true);
   useReveal();
   return (
@@ -658,7 +694,8 @@ export function SuiClone({ towers }: { towers: TowerCard[] }) {
         <Builders />
         <Industries />
         <Start />
-        <Newsletter />
+        <CatalogCta />
+        <Search initial={lots} />
         <Faq />
       </main>
       <Footer />
