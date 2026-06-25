@@ -22,7 +22,7 @@
 
   background: var(--ink);
   color: var(--on-dark);
-  font-family: var(--font-inter), var(--font-manrope), system-ui, sans-serif;
+  font-family: var(--font-jost), var(--font-inter), var(--font-manrope), system-ui, sans-serif;
   min-height: 100vh;
   /* clip (а не hidden): hidden делает .mcp scroll-контейнером и ломает
      position:sticky у хедера — с clip навбар липнет к окну на всех секциях */

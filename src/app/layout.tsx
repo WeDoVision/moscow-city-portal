@@ -8,6 +8,7 @@ import {
   Montserrat,
   Golos_Text,
   Lora,
+  Jost,
 } from "next/font/google";
 import Script from "next/script";
 import { portal } from "@/portal.config";
@@ -63,6 +64,12 @@ const lora = Lora({
   variable: "--font-lora",
 });
 
+// Jost — латиница (кириллицы у гарнитуры нет, для неё работает фолбэк).
+const jost = Jost({
+  subsets: ["latin"],
+  variable: "--font-jost",
+});
+
 export const metadata: Metadata = {
   metadataBase: new URL(portal.siteUrl),
   title: {
@@ -81,7 +88,7 @@ export default function RootLayout({
   return (
     <html
       lang="ru"
-      className={`${manrope.variable} ${prata.variable} ${playfair.variable} ${cormorant.variable} ${inter.variable} ${montserrat.variable} ${golos.variable} ${lora.variable}`}
+      className={`${manrope.variable} ${prata.variable} ${playfair.variable} ${cormorant.variable} ${inter.variable} ${montserrat.variable} ${golos.variable} ${lora.variable} ${jost.variable}`}
     >
       <body>
         {children}
