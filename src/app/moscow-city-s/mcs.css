@@ -1,0 +1,164 @@
+/*
+ * Scoped-стили лендинга /moscow-city-s. Всё под классом .mcs.
+ * Палитра и визуальный язык — как у sui.io: почти-чёрный navy,
+ * сигнальный синий #4DA2FF, аква-градиенты, неоновое свечение,
+ * текучий 3D-герой, гексагональная сетка экосистемы.
+ */
+.mcs {
+  --mcs-bg: #030f1c;
+  --mcs-bg-2: #061826;
+  --mcs-ink: #f1f7ff;
+  --mcs-muted: #8aa6bd;
+  --mcs-blue: #4da2ff;       /* сигнальный синий sui */
+  --mcs-sea: #6fbcf0;
+  --mcs-aqua: #7af0ff;
+  --mcs-mint: #c0e6ff;
+  --mcs-line: rgba(109, 168, 220, 0.14);
+  --mcs-card: rgba(255, 255, 255, 0.025);
+  --mcs-card-hover: rgba(77, 162, 255, 0.08);
+
+  background: var(--mcs-bg);
+  color: var(--mcs-ink);
+  font-family: var(--font-jost), var(--font-montserrat), var(--font-inter), system-ui, sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+.mcs ::selection {
+  background: var(--mcs-blue);
+  color: #02101e;
+}
+
+.mcs-gradient-text {
+  background: linear-gradient(96deg, #fff 0%, var(--mcs-sea) 40%, var(--mcs-blue) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Аврора-фон: мягкие движущиеся пятна синего света */
+.mcs-aurora { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.mcs-aurora span { position: absolute; border-radius: 9999px; filter: blur(90px); opacity: 0.5; }
+.mcs-aurora span:nth-child(1) {
+  width: 620px; height: 620px;
+  background: radial-gradient(circle, rgba(77, 162, 255, 0.7), transparent 70%);
+  top: -200px; left: -120px; animation: mcs-float 18s ease-in-out infinite;
+}
+.mcs-aurora span:nth-child(2) {
+  width: 520px; height: 520px;
+  background: radial-gradient(circle, rgba(122, 240, 255, 0.45), transparent 70%);
+  top: 10%; right: -160px; animation: mcs-float 22s ease-in-out infinite reverse;
+}
+.mcs-aurora span:nth-child(3) {
+  width: 460px; height: 460px;
+  background: radial-gradient(circle, rgba(111, 188, 240, 0.4), transparent 70%);
+  bottom: -200px; left: 35%; animation: mcs-float 26s ease-in-out infinite;
+}
+@keyframes mcs-float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(50px, -36px) scale(1.14); }
+}
+@media (prefers-reduced-motion: reduce) { .mcs-aurora span { animation: none; } }
+
+/* Тонкая «сетка небоскрёбов» */
+.mcs-grid {
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(var(--mcs-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--mcs-line) 1px, transparent 1px);
+  background-size: 60px 60px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 25%, transparent 75%);
+  pointer-events: none;
+}
+
+.mcs-card {
+  background: var(--mcs-card);
+  border: 1px solid var(--mcs-line);
+  border-radius: 20px;
+  transition: background 0.35s ease, border-color 0.35s ease, transform 0.35s ease, box-shadow 0.35s ease;
+}
+.mcs-card:hover {
+  background: var(--mcs-card-hover);
+  border-color: rgba(77, 162, 255, 0.45);
+  transform: translateY(-5px);
+  box-shadow: 0 20px 50px -20px rgba(77, 162, 255, 0.4);
+}
+
+/* Кнопки с фирменным свечением sui */
+.mcs-btn-primary {
+  position: relative;
+  background: linear-gradient(96deg, var(--mcs-blue), var(--mcs-sea));
+  color: #02101e; font-weight: 700; border-radius: 9999px;
+  box-shadow: 0 10px 34px rgba(77, 162, 255, 0.4);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.mcs-btn-primary:hover { transform: translateY(-2px); box-shadow: 0 16px 48px rgba(122, 240, 255, 0.55); }
+.mcs-btn-ghost {
+  border: 1px solid rgba(138, 166, 189, 0.4); border-radius: 9999px; color: var(--mcs-ink);
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+.mcs-btn-ghost:hover { border-color: var(--mcs-aqua); background: rgba(77, 162, 255, 0.1); transform: translateY(-2px); }
+
+.mcs-chip { border: 1px solid var(--mcs-line); border-radius: 9999px; background: rgba(255, 255, 255, 0.03); }
+
+/* Reveal при скролле */
+.mcs-reveal {
+  opacity: 0; transform: translateY(30px);
+  transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1), transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.mcs-reveal.is-in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .mcs-reveal { opacity: 1; transform: none; transition: none; } }
+
+/* Бегущая лента */
+.mcs-marquee { display: flex; gap: 3.5rem; width: max-content; animation: mcs-scroll 34s linear infinite; }
+.mcs-marquee:hover { animation-play-state: paused; }
+@keyframes mcs-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) { .mcs-marquee { animation: none; } }
+
+/* ── Гексагональная сетка экосистемы (как innovation toolkit sui) ── */
+.mcs-hex {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1.1547;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--mcs-line);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; padding: 12% 10%;
+  transition: background 0.45s ease, transform 0.45s ease;
+  cursor: pointer;
+}
+/* псевдо-граница гекса через подложку */
+.mcs-hex-wrap { position: relative; }
+.mcs-hex-wrap::before {
+  content: ""; position: absolute; inset: -1px; z-index: 0;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  background: var(--mcs-line);
+}
+.mcs-hex-wrap > .mcs-hex { position: relative; z-index: 1; }
+.mcs-hex-wrap[data-active="true"] > .mcs-hex {
+  background:
+    radial-gradient(circle at 50% 40%, rgba(77, 162, 255, 0.35), rgba(77, 162, 255, 0.06) 70%);
+  transform: scale(1.04);
+}
+.mcs-hex-wrap[data-active="true"]::before { background: linear-gradient(160deg, var(--mcs-aqua), var(--mcs-blue)); }
+.mcs-hex-wrap:hover > .mcs-hex { background: rgba(77, 162, 255, 0.14); }
+
+/* FAQ */
+.mcs-faq-a { max-height: 0; overflow: hidden; opacity: 0; transition: max-height 0.45s ease, opacity 0.35s ease; }
+.mcs-faq[data-open="true"] .mcs-faq-a { max-height: 340px; opacity: 1; }
+.mcs-faq[data-open="true"] .mcs-faq-chevron { transform: rotate(45deg); }
+.mcs-faq-chevron { transition: transform 0.3s ease; }
+
+/* Свечение под 3D-героем */
+.mcs-hero-glow {
+  position: absolute; left: 50%; top: 46%; width: 60vw; max-width: 760px; aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, rgba(77, 162, 255, 0.35), transparent 62%);
+  filter: blur(20px); pointer-events: none;
+}
+
+/* Точечная подсветка-пульс */
+@keyframes mcs-pulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
+.mcs-pulse { animation: mcs-pulse 2.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .mcs-pulse { animation: none; } }
