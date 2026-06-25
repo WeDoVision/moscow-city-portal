@@ -4,8 +4,8 @@
     {
       "name": "portal",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
-      "port": 3000
+      "runtimeArgs": ["run", "dev", "--", "-p", "50720"],
+      "port": 50720
     }
   ]
 }
