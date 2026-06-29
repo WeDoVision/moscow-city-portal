@@ -1,35 +1,37 @@
 /**
- * Контент клона osobnyaki.com — портал «особняки.com», все отдельно стоящие
- * здания и особняки центра Москвы. Структура повторяет оригинал, визуальный
- * язык переосмыслен в тёплой editorial-эстетике (кремовый фон, антиква,
- * бронзовый акцент) — под стать историческим усадьбам.
+ * Контент клона osobnyaki.com — каталог особняков и отдельно стоящих зданий
+ * Москвы. Факты (бренд, контакты, числа, команда, подборки, блог) сверены с
+ * оригиналом osobnyaki.com. Визуальный язык переосмыслен в тёплой
+ * editorial-эстетике (кремовый фон, антиква, бронзовый акцент).
  *
- * Фото — реальная архитектура с Unsplash (обычные <img>, мимо next/image),
+ * Все фото — реальные снимки с osobnyaki.com (обычные <img>, мимо next/image),
  * под каждым лежит градиент-плейсхолдер на случай сетевого сбоя.
  */
 
 export const brand = {
-  name: "особняки.com",
-  logoTop: "особняки",
+  name: "osobnyaki.com",
+  logoTop: "osobnyaki",
   logoDot: ".com",
-  tagline: "Все особняки центра Москвы",
+  tagline: "Все особняки Москвы",
   phone: "+7 (495) 320-95-45",
   phoneHref: "tel:+74953209545",
   email: "info@osobnyaki.com",
   address: "Москва, Пресненская набережная, 6с2, башня «Империя», офис 4315",
   hours: "Сейчас работаем",
+  // реальный WhatsApp с оригинала osobnyaki.com
   whatsapp:
-    "https://wa.me/74953209545?text=" +
-    encodeURIComponent("Здравствуйте! Интересует особняк в центре Москвы."),
-  telegram: "https://t.me/osobnyaki",
-  found: 944,
+    "https://api.whatsapp.com/send?phone=79296021757&text=" +
+    encodeURIComponent("Здравствуйте! Интересует особняк в Москве."),
+  // число реально доступных объектов из живого API (mansions). На самом
+  // osobnyaki.com headline-счётчик больше (944) — там собственная база.
+  found: 429,
 };
 
 export const nav = [
   {
     label: "Купить",
     items: [
-      { label: "Особняки в продаже", href: "#catalog", note: "944 объекта" },
+      { label: "Особняки в продаже", href: "#catalog", note: "от собственника" },
       { label: "Городские усадьбы", href: "#collections", note: "для жизни" },
       { label: "Памятники архитектуры", href: "#catalog", note: "ОКН" },
       { label: "С земельным участком", href: "#catalog", note: "с территорией" },
@@ -66,20 +68,21 @@ export const nav = [
 
 /** Крупные метрики под героем — только проверяемые факты с оригинала. */
 export const stats = [
-  { value: "944", label: "особняка в каталоге" },
+  { value: "400+", label: "особняков в каталоге" },
   { value: "0 ₽", label: "комиссия для покупателя" },
   { value: "25 мин", label: "подбор 2–5 особняков" },
-  { value: "центр", label: "только в центре Москвы" },
+  { value: "58", label: "районов Москвы" },
 ];
 
 /** Главный лот в герое — реальный объект с оригинала (лот №2728). */
 export const heroLot = {
   badge: "Предложение недели",
   title: "Особняк на Спартаковской площади, 14",
-  meta: "Красносельская · 1 775 м² · 4 этажа",
+  meta: "Бауманская · 1 775 м² · 4 этажа",
   price: "330 000 000 ₽",
   perM: "185 915 ₽/м²",
   img: "https://osobnyaki.com/assets/images/products/4564/1770318387-6984ea33e829f-spartakovskaya-ploshchad-14s2.png",
+  model: "/osobnyaki/models/spartakovskaya.glb",
 };
 
 /** Лента районов центра — бегущая строка доверия. */
@@ -152,33 +155,37 @@ export const collections = [
     kicker: "Авторская подборка",
     title: "Городские усадьбы для жизни",
     tag: "Для жизни",
-    count: "64 особняка",
+    count: "31 особняк",
     desc: "Отдельно стоящие особняки под частную резиденцию — тихие переулки, свой двор и историческая архитектура.",
     img: "https://osobnyaki.com/assets/images/usadba.png",
+    model: "/osobnyaki/models/usadba.glb",
   },
   {
     kicker: "Авторская подборка",
     title: "Особняки под ресторан",
     tag: "Под ресторан",
-    count: "85 объектов",
-    desc: "Здания с трафиком и отдельным входом под ресторан или кафе в центре Москвы.",
+    count: "11 объектов",
+    desc: "Здания с трафиком и отдельным входом под ресторан или кафе.",
     img: "https://osobnyaki.com/assets/images/products/4653/1766519803-694af3fb8bdcc-myasnitskaya-ulitsa-42s3.png",
+    model: "/osobnyaki/models/restoran.glb",
   },
   {
     kicker: "Авторская подборка",
     title: "Особняки под отель",
     tag: "Под отель",
-    count: "128 объектов",
-    desc: "Просторные особняки под бутик-отель или апарт-формат внутри Садового кольца.",
+    count: "34 объекта",
+    desc: "Просторные особняки под бутик-отель или апарт-формат.",
     img: "https://osobnyaki.com/assets/images/products/4447/1744826511-67fff08f7042b-volhovskiy-pereulok-16-20s1.png",
+    model: "/osobnyaki/models/otel.glb",
   },
   {
     kicker: "Авторская подборка",
     title: "Особняки под клинику",
     tag: "Под клинику",
-    count: "182 объекта",
+    count: "31 объект",
     desc: "Помещения под лицензируемую медицину — с подходящей планировкой и парковкой во дворе.",
     img: "https://osobnyaki.com/assets/images/products/4651/1766037618-69439872a9336-2-y-samotechny-pereulok-3.png",
+    model: "/osobnyaki/models/klinika.glb",
   },
 ];
 
@@ -258,30 +265,32 @@ export const magazine = {
   title: "Скачайте журнал с лучшими особняками июня",
   desc: "Новые объекты, специальные цены от собственников, идеи реставрации и советы экспертов — в одном PDF.",
   size: "23,71 МБ",
-  updated: "обновлён 24.06.26",
+  updated: "выпуск июня",
+  // реальное фото особняка с osobnyaki.com вместо стокового
   cover:
-    "https://images.unsplash.com/photo-1481253127861-534498168948?w=900&q=80&auto=format&fit=crop",
+    "https://osobnyaki.com/assets/images/products/4447/1744826511-67fff08f7042b-volhovskiy-pereulok-16-20s1.png",
 };
 
 /** Блог. */
+/** Реальные статьи блога osobnyaki.com (заголовки и фото — с оригинала). */
 export const posts = [
   {
     tag: "Усадьбы",
     title: "Усадьба Варвары Морозовой на Воздвиженке",
-    views: "4 397",
-    img: "https://images.unsplash.com/photo-1464146072230-91cabc968266?w=900&q=80&auto=format&fit=crop",
+    href: "https://osobnyaki.com/blog/osobnyak-varvary-morozovoy",
+    img: "https://osobnyaki.com/assets/components/phpthumbof/cache/article_4544_main_image_20250911_114330.3c915ef804c33374ab8b4125f8f3ec9f4544.jpg",
   },
   {
     tag: "История",
     title: "Петровский пассаж в Москве",
-    views: "4 892",
-    img: "https://images.unsplash.com/photo-1519222970733-f546218fa6d7?w=900&q=80&auto=format&fit=crop",
+    href: "https://osobnyaki.com/blog/petrovskiy-passazh-v-moskve",
+    img: "https://osobnyaki.com/assets/components/phpthumbof/cache/article_4506_main_image_20250703_131158.3c915ef804c33374ab8b4125f8f3ec9f4506.jpg",
   },
   {
     tag: "Гид",
     title: "Как купить усадьбу в Москве? Пошаговый гид и советы по реставрации",
-    views: "7 751",
-    img: "https://images.unsplash.com/photo-1523217582562-09d0def993a6?w=900&q=80&auto=format&fit=crop",
+    href: "https://osobnyaki.com/blog/kak-kupit-usadbu-v-moskve",
+    img: "https://osobnyaki.com/assets/components/phpthumbof/cache/article_4479_main_image_20250520_122710.3c915ef804c33374ab8b4125f8f3ec9f4479.jpg",
   },
 ];
 

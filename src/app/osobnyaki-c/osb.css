@@ -1,31 +1,35 @@
 /*
  * Scoped-стили клона osobnyaki.com — всё под классом .osb.
- * Эстетика: тёплый editorial-люкс под исторические особняки —
- * кремовая бумага, чернильный графит, бронзовый акцент, антиква Cormorant
- * для заголовков и гуманистический grotesque Manrope для текста.
- * Палитра построена в oklch для гармонии (одна светлота/хрома, разный hue).
+ * Тема как у pieterkoopt.nl: шалфейно-зелёный фон, чёрный (почти) акцент,
+ * кремовые карточки, гротеск для заголовков и текста, серифный италик-акцент.
+ * Палитра — фирменные свотчи pieterkoopt (#7a8b69 / #171c1c / #d4c6b9).
  */
 .osb {
-  /* Бумага и чернила — тёплые, не чистый белый/чёрный */
-  --osb-paper: oklch(0.967 0.012 85);
-  --osb-paper-2: oklch(0.94 0.016 80);
-  --osb-paper-3: oklch(0.90 0.02 78);
-  --osb-ink: oklch(0.235 0.012 60);
-  --osb-ink-soft: oklch(0.40 0.012 60);
-  --osb-muted: oklch(0.55 0.012 60);
+  /* Зелёный фон страницы + оттенки для секций/медиа */
+  --osb-paper: #7e8f6d;        /* sage green (pieterkoopt) */
+  --osb-paper-2: #74855f;      /* секции потемнее */
+  --osb-paper-3: #6c7d57;      /* подложка медиа */
 
-  /* Бронза / латунь — единственный насыщенный акцент */
-  --osb-bronze: oklch(0.62 0.085 65);
-  --osb-bronze-deep: oklch(0.52 0.09 60);
-  --osb-bronze-soft: oklch(0.86 0.05 75);
+  /* Кремовая поверхность приподнятых карточек — «выпрыгивает» на зелёном */
+  --osb-surface: #f4f1ea;
+  --osb-surface-2: #ebe6da;
 
-  --osb-line: oklch(0.235 0.012 60 / 0.12);
-  --osb-line-strong: oklch(0.235 0.012 60 / 0.22);
+  /* Чернила — фирменный почти-чёрный pieterkoopt */
+  --osb-ink: #171c1c;
+  --osb-ink-soft: #2f3733;
+  --osb-muted: #414a3e;        /* читается и на зелёном фоне, и на креме */
 
-  /* Шкала отступов 8pt */
-  --osb-shadow-sm: 0 1px 2px oklch(0.235 0.012 60 / 0.06);
-  --osb-shadow-md: 0 18px 40px -24px oklch(0.235 0.012 60 / 0.45);
-  --osb-shadow-lg: 0 40px 90px -40px oklch(0.235 0.012 60 / 0.55);
+  /* «Акцент» — чёрный и тёмно-оливковый; светлый (беж) для тёмных секций */
+  --osb-bronze: #2f3a28;
+  --osb-bronze-deep: #171c1c;
+  --osb-bronze-soft: #d4c6b9;  /* beige — на тёмном фоне */
+
+  --osb-line: rgba(23, 28, 28, 0.16);
+  --osb-line-strong: rgba(23, 28, 28, 0.30);
+
+  --osb-shadow-sm: 0 1px 2px rgba(23, 28, 28, 0.08);
+  --osb-shadow-md: 0 18px 40px -24px rgba(23, 28, 28, 0.42);
+  --osb-shadow-lg: 0 40px 90px -40px rgba(23, 28, 28, 0.5);
 
   background: var(--osb-paper);
   color: var(--osb-ink);
@@ -40,23 +44,26 @@
 }
 
 .osb ::selection {
-  background: var(--osb-bronze);
-  color: var(--osb-paper);
+  background: var(--osb-ink);
+  color: var(--osb-surface);
 }
 
-/* Антиква для дисплейных заголовков */
+/* Гротеск для дисплейных заголовков — как Basic Grotesque у pieterkoopt:
+   нормальный вес, плотный трекинг, line-height 1 */
 .osb-display {
-  font-family: var(--font-cormorant), Georgia, serif;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  line-height: 1.04;
+  font-family: var(--font-manrope), "Helvetica Neue", Arial, sans-serif;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  line-height: 1.02;
   text-wrap: balance;
 }
+/* Акцентное слово — серифный италик (как ivypresto-акценты pieterkoopt) */
 .osb-italic {
-  font-family: var(--font-cormorant), Georgia, serif;
+  font-family: var(--font-playfair), Georgia, serif;
   font-style: italic;
   font-weight: 500;
-  color: var(--osb-bronze-deep);
+  letter-spacing: -0.01em;
+  color: var(--osb-ink);
 }
 
 /* Надзаголовки-кикеры */
@@ -68,7 +75,7 @@
   font-weight: 600;
 }
 
-/* Тонкая бронзовая линейка */
+/* Тонкая зелёная линейка */
 .osb-rule {
   height: 1px;
   background: linear-gradient(90deg, transparent, var(--osb-bronze) 18%, var(--osb-bronze) 82%, transparent);
@@ -89,7 +96,7 @@
 }
 .osb-btn-primary {
   background: var(--osb-ink);
-  color: var(--osb-paper);
+  color: var(--osb-surface);
   box-shadow: var(--osb-shadow-sm);
 }
 .osb-btn-primary:hover {
@@ -104,19 +111,20 @@
 .osb-btn-ghost:hover {
   border-color: var(--osb-bronze);
   color: var(--osb-bronze-deep);
+  background: var(--osb-paper-2);
   transform: translateY(-2px);
 }
 
 .osb-chip {
   border: 1px solid var(--osb-line);
   border-radius: 9999px;
-  background: oklch(1 0 0 / 0.4);
+  background: rgba(244, 241, 234, 0.92);
   backdrop-filter: blur(6px);
 }
 
-/* ── Карточка ── */
+/* ── Карточка ── кремовая поверхность на зелёном фоне */
 .osb-card {
-  background: oklch(1 0 0 / 0.55);
+  background: var(--osb-surface);
   border: 1px solid var(--osb-line);
   border-radius: 18px;
   transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1),
@@ -126,6 +134,15 @@
   transform: translateY(-6px);
   border-color: var(--osb-line-strong);
   box-shadow: var(--osb-shadow-lg);
+}
+
+/* 3D-модель в карточке подборки */
+.osb-media model-viewer {
+  width: 100%;
+  height: 100%;
+  --poster-color: transparent;
+  --progress-bar-color: var(--osb-bronze);
+  background: transparent;
 }
 
 /* Медиа-обёртка с зумом картинки на ховере */
@@ -206,8 +223,8 @@
 .osb-stack-item .osb-card,
 .osb-stack-item .osb-card:hover {
   width: 100%;
-  background: var(--osb-paper);
-  box-shadow: 0 40px 80px -44px oklch(0.235 0.012 60 / 0.5);
+  background: var(--osb-surface);
+  box-shadow: 0 40px 80px -44px rgba(23, 28, 28, 0.5);
   transform: rotate(var(--rot, 0deg)) translate(var(--dx, 0), var(--dy, 0));
   transition: box-shadow 0.45s ease;
 }
@@ -280,6 +297,25 @@
   font-feature-settings: "tnum";
 }
 
+/* Скелет загрузки карточек каталога */
+@keyframes osb-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.osb-skel {
+  background: linear-gradient(
+    90deg,
+    var(--osb-paper-2) 25%,
+    color-mix(in oklch, var(--osb-paper-2), var(--osb-ink) 6%) 37%,
+    var(--osb-paper-2) 63%
+  );
+  background-size: 200% 100%;
+  animation: osb-shimmer 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .osb-skel { animation: none; }
+}
+
 /* Подчёркивание-ссылка с раскрытием слева направо */
 .osb-link {
   position: relative;
@@ -305,10 +341,10 @@
   transform: scaleX(1);
 }
 
-/* Бронзовый бейдж «Эксклюзив» */
+/* Чёрный бейдж «Эксклюзив» с кремовым текстом */
 .osb-badge {
   background: var(--osb-ink);
-  color: var(--osb-paper);
+  color: var(--osb-surface);
   border-radius: 9999px;
   font-size: 0.68rem;
   letter-spacing: 0.12em;
@@ -324,16 +360,17 @@
 .osb-filter {
   border: 1px solid var(--osb-line);
   border-radius: 9999px;
-  background: oklch(1 0 0 / 0.5);
+  background: var(--osb-surface);
   transition: border-color 0.25s ease, color 0.25s ease, background 0.25s ease;
 }
 .osb-filter:hover {
-  border-color: var(--osb-bronze);
-  color: var(--osb-bronze-deep);
+  border-color: var(--osb-ink);
+  color: var(--osb-ink);
+  background: var(--osb-surface);
 }
 .osb-filter[data-active="true"] {
   background: var(--osb-ink);
-  color: var(--osb-paper);
+  color: var(--osb-surface);
   border-color: var(--osb-ink);
 }
 
