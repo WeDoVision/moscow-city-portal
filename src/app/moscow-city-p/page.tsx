@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import "./mcp.css";
 import { SuiClone } from "./SuiClone";
 import { brand, toolkit, faq } from "./data";
 import { portal } from "@/portal.config";
@@ -58,7 +57,7 @@ export default async function MoscowCityClonePage() {
       label: t.tagline.toUpperCase(),
       logo: t.name.slice(0, 1),
       img: img ? imageUrl(img, 900) : null,
-      href: `/towers/${t.slug}`,
+      href: `/moscow-city-p/towers/${t.slug}`,
     };
   });
 
