@@ -7,8 +7,8 @@
  * 1:1 дубликат, потому что это буквально их файлы.
  *
  * Поверх — единственная наша правка: в секцию «Проекты Whitewill» вместо
- * внешних проектов подставляем порталы, созданные на платформе (listPortals),
- * с учётом оформления карточки из админки (обложка/цвета/шрифт).
+ * внешних проектов подставляем флагманские порталы Whitewill (PROJECTS),
+ * ведущие на бутиковые лендинги внутри приложения.
  *
  * Это Route Handler, а не страница, поэтому корневой layout не оборачивает
  * ответ — отдаётся цельный HTML-документ.
@@ -16,9 +16,7 @@
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { listPortals } from "@/lib/portal/store";
-import type { PortalSchema } from "@/lib/portal/schema";
-import { fontCss, GOOGLE_FONTS_HREF } from "@/lib/portal/fonts";
+import { GOOGLE_FONTS_HREF } from "@/lib/portal/fonts";
 import { getHomeOverrides } from "@/lib/portal/home-store";
 import { applyHomeOverrides } from "@/lib/portal/home-overrides";
 
@@ -92,45 +90,53 @@ function esc(s: string): string {
 }
 
 /**
- * Карточка портала — композиция как у .projects__item на whitewill:
- * фоновое фото + центрированный логотип (или название) + подпись-дескриптор.
- * Только фото: индивидуальные цвета/шрифт не настраиваются.
+ * Карточки секции «Проекты Whitewill» — флагманские порталы Whitewill.
+ * Оформление 1:1 повторяет оригинальные .projects__item с whitewill.ru
+ * (их же CSS подтягивается через <base href>), но ссылки ведут на наши
+ * бутиковые лендинги (см. project-update в Linear: Москоу-Сити →
+ * /moscow-city-p, Особняки → /osobnyaki-c).
  */
-function portalCard(p: PortalSchema, origin: string): string {
-  const titleFont = fontCss(undefined); // дефолтный сериф (Prata)
-  const cover = p.card?.image;
-  const logo = p.card?.logo;
-  // подпись показываем только если задана явно (без авто-«продажа · N блоков»)
-  const subtitle = p.card?.subtitle?.trim() || "";
+type ProjectCard = {
+  href: string; // внутренний путь (без origin) — добавляется в projectCard()
+  bg: string; // фоновое фото проекта (базовый URL без ?width)
+  bgAlt: string;
+  logo: string; // логотип проекта (svg)
+  logoWidth: string; // ширина логотипа как на оригинале (em)
+};
 
-  const coverHtml = cover
-    ? `<img class="ww-pcard__cover" loading="lazy" src="${esc(cover)}${cover.includes("?") ? "&" : "?"}width=760" alt="${esc(p.name)}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .4s;">`
-    : "";
-  // затемнение для читаемости текста поверх фото
-  const overlay = `<span style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,0.55),rgba(0,0,0,0.15),rgba(0,0,0,0.35));"></span>`;
+const PROJECTS: ProjectCard[] = [
+  {
+    href: "/moscow-city-p",
+    bg: "https://cdn.ww.estate/tp/s/whitewill.ru/uploads/projects/6/background/moskva-siti-fon.png",
+    bgAlt: "Moscow City",
+    logo: "https://cdn.ww.estate/tp/s/whitewill.ru/uploads/projects/6/logo/logo-moskva-siti.svg",
+    logoWidth: "22em",
+  },
+  {
+    href: "/osobnyaki-c",
+    bg: "https://cdn.ww.estate/tp/s/whitewill.ru/uploads/projects/4/background/osobnyaki-fon.png",
+    bgAlt: "Особняки",
+    logo: "https://cdn.ww.estate/tp/s/whitewill.ru/uploads/projects/4/logo/logo-osobnyaki.svg",
+    logoWidth: "11em",
+  },
+];
 
-  // размер логотипа на карточке (s | m по умолчанию | l)
-  // ширина логотипа в долях ширины карточки (max-height не даёт перерасти по высоте).
-  // Важно задавать именно width, а не max-width: SVG с маленьким «родным» размером
-  // по max-width не увеличивается — width его масштабирует до нужной доли.
-  const LOGO_SIZE: Record<string, string> = {
-    s: "width:45%;max-height:50%;",
-    m: "width:60%;max-height:65%;",
-    l: "width:75%;max-height:80%;",
-  };
-  const logoStyle = LOGO_SIZE[p.card?.logoSize ?? "m"] || LOGO_SIZE.m;
-
-  // центральный блок: логотип ИЛИ название, плюс подпись
-  const center = logo
-    ? `<img class="ww-pcard__logo" loading="lazy" src="${esc(logo)}" alt="${esc(p.name)}" style="${logoStyle}height:auto;object-fit:contain;">`
-    : `<span class="ww-pcard__title" style="font-family:${titleFont};font-size:2rem;line-height:1.05;color:#ffffff;">${esc(p.name)}</span>`;
-
-  return `<a class="ww-pcard" href="${origin}/p/${esc(p.slug)}" style="position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;aspect-ratio:2/1;overflow:hidden;border-radius:2px;background:#0c1b20;padding:1.5rem;text-decoration:none;color:#ffffff;">
-    ${coverHtml}${overlay}
-    <span style="position:relative;z-index:2;width:100%;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
-      ${center}
-      ${subtitle ? `<span class="ww-pcard__sub" style="font-size:0.85rem;color:rgba(255,255,255,0.72);">${esc(subtitle)}</span>` : ""}
-    </span>
+/**
+ * Карточка проекта — точная копия разметки .projects__item с оригинала:
+ * фоновое фото (с их srcset) + центрированный логотип. Стили берутся из их же
+ * бандла. href обязан быть абсолютным (origin+path): в зеркале <base href>
+ * указывает на whitewill.ru, и относительный путь уехал бы на боевой сайт.
+ */
+function projectCard(c: ProjectCard, origin: string): string {
+  const w = (n: number) => `${esc(c.bg)}?width=${n}`;
+  const srcset = [610, 510, 322, 360, 185].map((n) => `${w(n)} ${n}w`).join(",\n");
+  const sizes =
+    "(max-width: 767px) 360px, (max-width: 1024px) 322px, (max-width: 1620px) 510px, 610px";
+  return `<a href="${origin}${esc(c.href)}" class="projects__item">
+    <div class="projects__item-image">
+      <img loading="lazy" src="${w(300)}" srcset="${srcset}" sizes="${sizes}" alt="${esc(c.bgAlt)}">
+    </div>
+    <img src="${esc(c.logo)}" style="width: ${esc(c.logoWidth)};" alt="${esc(c.bgAlt)}" class="projects__item-logo" loading="lazy">
   </a>`;
 }
 
@@ -165,20 +171,18 @@ export async function GET(req: Request): Promise<Response> {
       `${m}<base href="https://whitewill.ru/"><link rel="stylesheet" href="${GOOGLE_FONTS_HREF}">`,
   );
 
-  // 2) Подменяем содержимое секции «Проекты» на наши порталы
+  // 2) Подменяем содержимое секции «Проекты» на флагманские порталы Whitewill
   try {
-    const portals = await listPortals();
     const grid = findGrid(html);
-    if (grid && portals.length) {
-      const cards = portals.map((p) => portalCard(p, origin)).join("\n");
-      const newGrid =
-        `<div class="projects__grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:1rem;">` +
-        cards +
-        `</div>`;
+    if (grid) {
+      const cards = PROJECTS.map((c) => projectCard(c, origin)).join("\n");
+      // переиспользуем оригинальный открывающий тег сетки (его классы и стили),
+      // меняем только содержимое — две наши карточки
+      const newGrid = grid.open + cards + `</div>`;
       html = html.slice(0, grid.start) + newGrid + html.slice(grid.end);
     }
   } catch {
-    /* нет порталов / fs — отдаём зеркало как есть */
+    /* секция не найдена — отдаём зеркало как есть */
   }
 
   // 3) ИИ-оверрайды главной (замены текста, скрытие секций, CSS, вставки)

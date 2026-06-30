@@ -9,6 +9,7 @@ export const revalidate = 600;
 
 export type TowerCard = {
   id: number;
+  slug: string;
   num: string;
   name: string;
   tagline: string;
@@ -51,6 +52,7 @@ export default async function MoscowCityClonePage() {
     const img = cx?.images?.[0];
     return {
       id: t.id,
+      slug: t.slug,
       num: String(i + 1).padStart(2, "0"),
       name: t.name,
       tagline: t.tagline,

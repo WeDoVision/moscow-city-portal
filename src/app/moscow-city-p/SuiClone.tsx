@@ -9,6 +9,100 @@ import type { TowerCard } from "./page";
 import type { LotFilterResult } from "@/lib/whitewill/types";
 import { Search } from "./Search";
 
+/**
+ * Надёжный плавный скролл к секции. Главная проблема обычного
+ * scrollIntoView/нативного якоря: пока идёт прокрутка, секции между текущей
+ * позицией и целью «дорастают» по высоте (раскрываются карточки башен в
+ * #toolkit, срабатывают reveal-анимации) — итоговая позиция цели смещается, и
+ * браузер не доезжает. Здесь цель пересчитывается каждый кадр, а в конце есть
+ * фаза «доводки», которая держит скролл на цели, пока её координата не
+ * стабилизируется. Это чинит скролл независимо от того, прогрузился ли уже
+ * контент ниже «Выберите свою высоту».
+ */
+const SCROLL_OFFSET = 64; // высота липкого хедера (h-14) + небольшой зазор
+let cancelActiveScroll: (() => void) | null = null;
+
+function smoothScrollToId(id: string) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  cancelActiveScroll?.();
+
+  const maxY = () => Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+  const targetY = () =>
+    Math.min(maxY(), Math.max(0, el.getBoundingClientRect().top + window.scrollY - SCROLL_OFFSET));
+
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+    window.scrollTo(0, targetY());
+    return;
+  }
+
+  const startY = window.scrollY;
+  const t0 = performance.now();
+  const dur = 700;
+  const ease = (t: number) => 1 - Math.pow(1 - t, 3);
+  let raf = 0;
+  let aborted = false;
+
+  // глобальный CSS scroll-behavior: smooth превратил бы каждый наш scrollTo в
+  // собственную анимацию (и сам по себе ломает доскролл при сдвиге layout) —
+  // на время прокрутки принудительно выключаем его инлайном.
+  const root = document.documentElement;
+  const prevBehavior = root.style.scrollBehavior;
+  root.style.scrollBehavior = "auto";
+
+  const onUser = () => { aborted = true; };
+  // если пользователь сам начал прокручивать — не мешаем ему
+  window.addEventListener("wheel", onUser, { passive: true });
+  window.addEventListener("touchstart", onUser, { passive: true });
+  window.addEventListener("keydown", onUser);
+  const cleanup = () => {
+    window.removeEventListener("wheel", onUser);
+    window.removeEventListener("touchstart", onUser);
+    window.removeEventListener("keydown", onUser);
+    root.style.scrollBehavior = prevBehavior;
+    if (cancelActiveScroll === stop) cancelActiveScroll = null;
+  };
+  const stop = () => { aborted = true; cancelAnimationFrame(raf); cleanup(); };
+  cancelActiveScroll = stop;
+
+  const glide = (now: number) => {
+    if (aborted) return cleanup();
+    const t = Math.min(1, (now - t0) / dur);
+    const dest = targetY(); // пересчёт цели на каждом кадре
+    window.scrollTo(0, startY + (dest - startY) * ease(t));
+    if (t < 1) raf = requestAnimationFrame(glide);
+    else raf = requestAnimationFrame(settle);
+  };
+  // Доводка: держим скролл на цели, пока её координата не перестанет «плыть».
+  // Карточки башен раскрываются max-height-переходом по 0.8s каждая, поэтому
+  // ждём дольше (до ~2.5s) и до 4 стабильных кадров подряд.
+  let prev = NaN, stable = 0, frames = 0;
+  const settle = () => {
+    if (aborted) return cleanup();
+    const dest = targetY();
+    window.scrollTo(0, dest);
+    if (Math.abs(dest - prev) < 1) stable += 1; else stable = 0;
+    prev = dest;
+    frames += 1;
+    if (stable < 4 && frames < 150) raf = requestAnimationFrame(settle);
+    else cleanup();
+  };
+  raf = requestAnimationFrame(glide);
+}
+
+/** Перехватывает клики по якорным ссылкам (a[href^="#"]) и скроллит надёжно. */
+function onAnchorClick(e: React.MouseEvent) {
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const a = (e.target as HTMLElement).closest('a[href^="#"]') as HTMLAnchorElement | null;
+  if (!a) return;
+  const hash = a.getAttribute("href") || "";
+  if (hash.length < 2) return;
+  const id = hash.slice(1);
+  if (!document.getElementById(id)) return;
+  e.preventDefault();
+  smoothScrollToId(id);
+}
+
 function useReveal() {
   useEffect(() => {
     const io = new IntersectionObserver(
@@ -235,8 +329,7 @@ function Integrity() {
     <section id="integrity" className="mcp-light scroll-mt-16 pt-24 md:pt-32">
       <div className="mx-auto mb-14 max-w-[1800px] px-2.5">
         <div className="mcp-reveal">
-          <p className="mcp-mono text-lg uppercase tracking-[0.25em] text-[#1aa3ff]">{integrity.eyebrow}</p>
-          <h2 className="mt-5 text-6xl font-bold leading-[1.02] tracking-tight md:text-8xl">
+          <h2 className="text-6xl font-bold leading-[1.02] tracking-tight md:text-8xl">
             {integrity.title}
             <span className="mcp-hl">
               <span>{integrity.highlight}</span>
@@ -371,7 +464,7 @@ function Toolkit({ towers = [] }: { towers?: TowerCard[] }) {
             {towers.map((t, i) => {
               const right = i % 2 === 1;
               return (
-                <div key={t.num} className="mcp-reveal relative md:grid md:grid-cols-2 md:items-center md:gap-14" style={{ transitionDelay: "60ms" }}>
+                <div key={t.num} id={`tower-${t.slug}`} className="mcp-reveal relative scroll-mt-24 md:grid md:grid-cols-2 md:items-center md:gap-14" style={{ transitionDelay: "60ms" }}>
                   <span className="mcp-tl-node hidden md:block" aria-hidden />
                   <span className="mcp-tl-stub hidden md:block" style={right ? { left: "50%" } : { right: "50%" }} aria-hidden />
                   {!right && <TowerTile t={t} />}
@@ -398,7 +491,7 @@ function TowerTile({ t }: { t: TowerCard }) {
     window.dispatchEvent(
       new CustomEvent("portal:applyFilters", { detail: { towers: [t.id] } }),
     );
-    document.getElementById("search")?.scrollIntoView({ behavior: "smooth" });
+    smoothScrollToId("search");
   };
   return (
     <a href={t.href} className="mcp-tower group relative z-10 block">
@@ -573,7 +666,7 @@ function Start() {
                     href="#search"
                     onClick={(e) => {
                       e.preventDefault();
-                      document.getElementById("search")?.scrollIntoView({ behavior: "smooth" });
+                      smoothScrollToId("search");
                     }}
                     className="mcp-start-cta flex"
                   >
@@ -642,11 +735,11 @@ function Faq() {
 }
 
 function Footer() {
+  // только реальные каналы из оригинала moscowcitysale.ru: VK, Дзен, WhatsApp
   const social = [
-    { label: "YouTube", d: "M22 8.5a3 3 0 00-2-2C18 6 12 6 12 6s-6 0-8 .5a3 3 0 00-2 2C2 10 2 12 2 12s0 2 .5 3.5a3 3 0 002 2c2 .5 8 .5 8 .5s6 0 8-.5a3 3 0 002-2C22 14 22 12 22 12s0-2-.5-3.5zM10 15V9l5 3-5 3z" },
-    { label: "Telegram", d: "M21 4L3 11l5 2 2 6 3-4 5 4 3-15z" },
-    { label: "VK", d: "M3 7h3c.5 4 2 6 3 6V7h3v4c1 0 2-1 3-4h3c-.5 2-2 4-3 5 1 1 3 3 3 5h-3c-1-2-2-3-3-3v3H9C5 19 3 12 3 7z" },
-    { label: "WhatsApp", d: "M4 20l1.5-4A8 8 0 1112 20a8 8 0 01-4-1L4 20z" },
+    { label: "VK", href: brand.vk, d: "M3 7h3c.5 4 2 6 3 6V7h3v4c1 0 2-1 3-4h3c-.5 2-2 4-3 5 1 1 3 3 3 5h-3c-1-2-2-3-3-3v3H9C5 19 3 12 3 7z" },
+    { label: "Дзен", href: brand.zen, d: "M12 3c0 5 1 6 6 6-5 0-6 1-6 6 0-5-1-6-6-6 5 0 6-1 6-6z" },
+    { label: "WhatsApp", href: brand.whatsapp, d: "M4 20l1.5-4A8 8 0 1112 20a8 8 0 01-4-1L4 20z" },
   ];
   return (
     <footer id="footer" className="mcp-dark border-t border-[var(--line-dark)] pt-16">
@@ -666,7 +759,7 @@ function Footer() {
         <div className="mt-16 flex flex-col items-start justify-between gap-5 border-t border-[var(--line-dark)] py-7 md:flex-row md:items-center">
           <div className="flex items-center gap-4">
             {social.map((s) => (
-              <a key={s.label} href={s.label === "Telegram" ? brand.telegram : s.label === "WhatsApp" ? brand.whatsapp : "#top"} aria-label={s.label} className="grid h-9 w-9 place-items-center rounded-lg border border-[var(--line-dark)] text-[#8b929c] transition-colors hover:border-[#1aa3ff] hover:text-white">
+              <a key={s.label} href={s.href} target="_blank" rel="noopener noreferrer" aria-label={s.label} className="grid h-9 w-9 place-items-center rounded-lg border border-[var(--line-dark)] text-[#8b929c] transition-colors hover:border-[#1aa3ff] hover:text-white">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d={s.d} stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" /></svg>
               </a>
             ))}
@@ -681,8 +774,19 @@ function Footer() {
 export function SuiClone({ towers, lots }: { towers: TowerCard[]; lots: LotFilterResult }) {
   const [bar, setBar] = useState(true);
   useReveal();
+  // Глубокая ссылка с хэшем (например переход с подстраницы на
+  // /moscow-city-p#tower-oko) — доводим надёжным скроллом после монтирования,
+  // т.к. секции/карточки появляются не сразу и нативный якорь промахивается.
+  useEffect(() => {
+    const id = window.location.hash.slice(1);
+    if (!id) return;
+    const t = setTimeout(() => {
+      if (document.getElementById(id)) smoothScrollToId(id);
+    }, 300);
+    return () => clearTimeout(t);
+  }, []);
   return (
-    <div className="mcp">
+    <div className="mcp" onClickCapture={onAnchorClick}>
       {bar && <AnnounceBar onClose={() => setBar(false)} />}
       <Header offset={bar} />
       <main>

@@ -40,6 +40,7 @@ export interface Mansion {
   priceLabel: string; // «2 300 000 000 ₽» или «Цена по запросу»
   perMLabel: string | null; // «756 579 ₽ / м²»
   image: string; // абсолютный CDN-URL первой фотографии
+  images: string[]; // все фотографии (галерея на странице лота)
   lotLink: string; // страница лота на whitewill.ru
   stickers: string[]; // «Выбор Whitewill» …
   featured: boolean; // есть «выбор whitewill» — в показ по умолчанию
@@ -128,6 +129,7 @@ function normalizeCard(c: RawCard, deal: Deal): Mansion {
     priceLabel,
     perMLabel: hasPrice ? stripHtml(rub?.pricePerAreaFormatted) || null : null,
     image: imageUrl(c.images?.[0]),
+    images: (c.images ?? []).filter(Boolean).map((p) => imageUrl(p, 1600)),
     lotLink: c.lotLink,
     stickers,
     featured: stickers.some((s) => /whitewill/i.test(s)),
@@ -177,4 +179,10 @@ export async function fetchMansions(): Promise<CatalogData> {
     facets: { districts, purposes },
     counts: { sale: sale.length, rent: rent.length, total: lots.length },
   };
+}
+
+/** Один особняк по id (для страницы лота). Берёт из общего кеша каталога. */
+export async function getMansion(id: number): Promise<Mansion | null> {
+  const { lots } = await fetchMansions();
+  return lots.find((l) => l.id === id) ?? null;
 }

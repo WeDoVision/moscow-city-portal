@@ -5,46 +5,59 @@
  * Тексты, названия и иконки — оригинальные, про деловой центр Москва-Сити.
  */
 
+// Контакты сверены с оригиналом moscowcitysale.ru: телефон, email и адрес —
+// как на сайте; из соцсетей в исходнике реально указаны только VK и Дзен
+// (ссылки на Telegram/WhatsApp там навешиваются скриптом и в статике
+// отсутствуют, поэтому мессенджеры строим от официального телефона).
 export const brand = {
   name: "Moscow City",
   phone: "+7 (495) 988-99-50",
   phoneHref: "tel:+74959889950",
   email: "info@moscowcitysale.ru",
-  address: "Москва, Пресненская набережная, 6с2, башня «Империя»",
+  address: "Москва, Пресненская набережная, 6с2, башня «Империя», 3-й подъезд, офис 4315",
   whatsapp:
     "https://wa.me/74959889950?text=" +
     encodeURIComponent("Здравствуйте! Интересует недвижимость в Москва-Сити."),
-  telegram: "https://t.me/moscowcity_sale",
+  vk: "https://vk.com/moscowcitysalesru",
+  zen: "https://zen.ya.ru/id/60edaeea4117fb777400e736?lang=ru",
 };
 
 export const announce = "Новые лоты в Capital Towers уже в базе портала";
 
-/** Меню — как у sui: пункты с «+»-боксом-раскрывашкой. */
+/**
+ * Меню — пункты с «+»-боксом-раскрывашкой. Каждая ссылка ведёт на реально
+ * существующую секцию страницы:
+ *   #industries — сегменты (Апартаменты/Офисы/Пентхаусы/Ритейл),
+ *   #toolkit    — башни «Выберите свою высоту»,
+ *   #start      — услуги (подбор/показ/аренда/брокер),
+ *   #search     — каталог лотов с фильтрами,
+ *   #builders   — «Почему выбирают нас», #footer — контакты.
+ */
 export const nav = [
   { label: "Недвижимость", items: [
-    { label: "Апартаменты", href: "#integrity", note: "183 в продаже" },
+    { label: "Апартаменты", href: "#industries", note: "183 в продаже" },
     { label: "Офисы", href: "#industries", note: "69 предложений" },
     { label: "Пентхаусы", href: "#industries", note: "9 эксклюзивов" },
     { label: "Ритейл", href: "#industries", note: "free-use" },
   ]},
+  // порядок совпадает с порядком карточек в секции «Башни» (portal.towers)
   { label: "Башни", items: [
-    { label: "Федерация", href: "#toolkit", note: "374 м" },
-    { label: "ОКО", href: "#toolkit", note: "354 м" },
-    { label: "Neva Towers", href: "#toolkit", note: "345 м" },
-    { label: "Capital Towers", href: "#toolkit", note: "295 м" },
+    { label: "Capital Towers", href: "#tower-capital-towers", note: "295 м" },
+    { label: "Neva Towers", href: "#tower-neva-towers", note: "345 м" },
+    { label: "ОКО", href: "#tower-oko", note: "354 м" },
+    { label: "Федерация", href: "#tower-federation", note: "374 м" },
+    { label: "Город Столиц", href: "#tower-gorod-stolic", note: "302 м" },
+    { label: "Империя", href: "#tower-imperia", note: "239 м" },
+    { label: "Дом Дау", href: "#tower-dom-dau", note: "340 м" },
   ]},
   { label: "Услуги", items: [
     { label: "Подбор под ключ", href: "#start", note: "за 7 минут" },
-    { label: "Аренда", href: "#search", note: "жильё и офисы" },
+    { label: "Каталог лотов", href: "#search", note: "жильё и офисы" },
     { label: "Ипотека", href: "#start", note: "банки-партнёры" },
     { label: "Сопровождение", href: "#start", note: "юристы" },
   ]},
-  { label: "Аналитика", items: [
-    { label: "Цены 2026", href: "#start", note: "обзор" },
-    { label: "Гид по башням", href: "#toolkit", note: "что выбрать" },
-  ]},
   { label: "О портале", items: [
-    { label: "О Moscow City", href: "#integrity", note: "деловой центр" },
+    { label: "Почему выбирают нас", href: "#builders", note: "о портале" },
     { label: "Контакты", href: "#footer", note: "24/7" },
   ]},
 ];
@@ -61,17 +74,16 @@ export const partners = [
   "Ингеоком", "Solvers", "Whitewill", "ДОМ.РФ",
 ];
 
-/** Светлая секция: «экономика, переосмысленная» → большие editorial-строки. */
+/** Светлая секция: большие editorial-строки — преимущества покупки в Сити. */
 export const integrity = {
-  eyebrow: "Адрес, переосмысленный",
   title: "Недвижимость, построенная на ",
   highlight: "доверии",
   rows: [
     { title: "Готова к заселению", icon: "exchange" },
-    { title: "Проверяемая по умолчанию", icon: "shield" },
-    { title: "Готовая для бизнеса", icon: "briefcase" },
-    { title: "Масштабируемая и гибкая", icon: "expand" },
-    { title: "Статусная по адресу", icon: "chart" },
+    { title: "Юридически чистая сделка", icon: "shield" },
+    { title: "Прямые цены от застройщиков", icon: "briefcase" },
+    { title: "Гибкая рассрочка и ипотека", icon: "expand" },
+    { title: "Растёт в цене каждый год", icon: "chart" },
   ],
 };
 
@@ -132,7 +144,7 @@ export const start = {
     { title: "Начать подбор", desc: "Расскажите бюджет и задачу — эксперт пришлёт варианты из всех семи башен за 7 минут.", cta: "Выбрать лот", href: "#search" },
     { title: "Записаться на показ", desc: "Очный или онлайн-показ любой башни в удобное время.", cta: "Выбрать время", href: "#footer" },
     { title: "Подобрать в аренду", desc: "Апартаменты и офисы Москва-Сити в аренду — подберём под бюджет и срок.", cta: "Смотреть аренду", href: "#search" },
-    { title: "Связаться с брокером", desc: "Горячая линия 24/7 в мессенджерах и по телефону.", cta: "Написать в Telegram", href: "" /* telegram */ },
+    { title: "Связаться с брокером", desc: "Горячая линия 24/7 в мессенджерах и по телефону.", cta: "Написать в WhatsApp", href: "" /* whatsapp */ },
   ],
 };
 

@@ -119,11 +119,11 @@ export function McpHeader() {
 }
 
 export function McpFooter() {
+  // только реальные каналы из оригинала moscowcitysale.ru: VK, Дзен, WhatsApp
   const social = [
-    { label: "YouTube", d: "M22 8.5a3 3 0 00-2-2C18 6 12 6 12 6s-6 0-8 .5a3 3 0 00-2 2C2 10 2 12 2 12s0 2 .5 3.5a3 3 0 002 2c2 .5 8 .5 8 .5s6 0 8-.5a3 3 0 002-2C22 14 22 12 22 12s0-2-.5-3.5zM10 15V9l5 3-5 3z" },
-    { label: "Telegram", d: "M21 4L3 11l5 2 2 6 3-4 5 4 3-15z" },
-    { label: "VK", d: "M3 7h3c.5 4 2 6 3 6V7h3v4c1 0 2-1 3-4h3c-.5 2-2 4-3 5 1 1 3 3 3 5h-3c-1-2-2-3-3-3v3H9C5 19 3 12 3 7z" },
-    { label: "WhatsApp", d: "M4 20l1.5-4A8 8 0 1112 20a8 8 0 01-4-1L4 20z" },
+    { label: "VK", href: brand.vk, d: "M3 7h3c.5 4 2 6 3 6V7h3v4c1 0 2-1 3-4h3c-.5 2-2 4-3 5 1 1 3 3 3 5h-3c-1-2-2-3-3-3v3H9C5 19 3 12 3 7z" },
+    { label: "Дзен", href: brand.zen, d: "M12 3c0 5 1 6 6 6-5 0-6 1-6 6 0-5-1-6-6-6 5 0 6-1 6-6z" },
+    { label: "WhatsApp", href: brand.whatsapp, d: "M4 20l1.5-4A8 8 0 1112 20a8 8 0 01-4-1L4 20z" },
   ];
   return (
     <footer className="mcp-dark border-t border-[var(--line-dark)] pt-16">
@@ -153,13 +153,9 @@ export function McpFooter() {
             {social.map((s) => (
               <a
                 key={s.label}
-                href={
-                  s.label === "Telegram"
-                    ? brand.telegram
-                    : s.label === "WhatsApp"
-                      ? brand.whatsapp
-                      : HOME
-                }
+                href={s.href}
+                target="_blank"
+                rel="noopener noreferrer"
                 aria-label={s.label}
                 className="grid h-9 w-9 place-items-center rounded-lg border border-[var(--line-dark)] text-[#8b929c] transition-colors hover:border-[#1aa3ff] hover:text-white"
               >

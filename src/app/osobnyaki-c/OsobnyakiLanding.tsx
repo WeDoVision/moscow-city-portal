@@ -14,6 +14,105 @@ import {
   footerCols,
 } from "./data";
 import type { CatalogData, Mansion } from "@/lib/osobnyaki/lots";
+import {
+  type Filters,
+  type ParsedSearch,
+  EMPTY_FILTERS,
+  PRICE_BANDS,
+  FLOOR_BANDS,
+  SEARCH_SUGGEST,
+  dealLabel,
+  filtersActive,
+  lotMatches,
+  sortLots,
+  parseSearch,
+} from "@/lib/osobnyaki/search";
+
+/**
+ * Надёжный плавный скролл к секции. Нативный якорь/scrollIntoView промахивается,
+ * когда контент ниже ещё «дорастает» по высоте во время прокрутки: каталог
+ * подгружается асинхронно (скелет → карточки), reveal-анимации и sticky-колода
+ * подборок меняют layout. Здесь цель пересчитывается каждый кадр, а в конце
+ * есть фаза доводки, пока координата цели не стабилизируется. Глобальный
+ * CSS scroll-behavior: smooth на время прокрутки выключаем (иначе каждый наш
+ * scrollTo сам бы анимировался и ломал доводку).
+ */
+const SCROLL_OFFSET = 84; // фиксированный хедер h-[72px] + небольшой зазор
+let cancelActiveScroll: (() => void) | null = null;
+
+function smoothScrollToId(id: string) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  cancelActiveScroll?.();
+
+  const maxY = () => Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+  const targetY = () =>
+    Math.min(maxY(), Math.max(0, el.getBoundingClientRect().top + window.scrollY - SCROLL_OFFSET));
+
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+    window.scrollTo(0, targetY());
+    return;
+  }
+
+  const root = document.documentElement;
+  const prevBehavior = root.style.scrollBehavior;
+  root.style.scrollBehavior = "auto";
+
+  const startY = window.scrollY;
+  const t0 = performance.now();
+  const dur = 700;
+  const ease = (t: number) => 1 - Math.pow(1 - t, 3);
+  let raf = 0;
+  let aborted = false;
+
+  const onUser = () => { aborted = true; };
+  window.addEventListener("wheel", onUser, { passive: true });
+  window.addEventListener("touchstart", onUser, { passive: true });
+  window.addEventListener("keydown", onUser);
+  const cleanup = () => {
+    window.removeEventListener("wheel", onUser);
+    window.removeEventListener("touchstart", onUser);
+    window.removeEventListener("keydown", onUser);
+    root.style.scrollBehavior = prevBehavior;
+    if (cancelActiveScroll === stop) cancelActiveScroll = null;
+  };
+  const stop = () => { aborted = true; cancelAnimationFrame(raf); cleanup(); };
+  cancelActiveScroll = stop;
+
+  const glide = (now: number) => {
+    if (aborted) return cleanup();
+    const t = Math.min(1, (now - t0) / dur);
+    const dest = targetY();
+    window.scrollTo(0, startY + (dest - startY) * ease(t));
+    if (t < 1) raf = requestAnimationFrame(glide);
+    else raf = requestAnimationFrame(settle);
+  };
+  let prev = NaN, stable = 0, frames = 0;
+  const settle = () => {
+    if (aborted) return cleanup();
+    const dest = targetY();
+    window.scrollTo(0, dest);
+    if (Math.abs(dest - prev) < 1) stable += 1; else stable = 0;
+    prev = dest;
+    frames += 1;
+    if (stable < 4 && frames < 150) raf = requestAnimationFrame(settle);
+    else cleanup();
+  };
+  raf = requestAnimationFrame(glide);
+}
+
+/** Перехватывает клики по якорным ссылкам (a[href^="#"]) и скроллит надёжно. */
+function onAnchorClick(e: React.MouseEvent) {
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const a = (e.target as HTMLElement).closest('a[href^="#"]') as HTMLAnchorElement | null;
+  if (!a) return;
+  const hash = a.getAttribute("href") || "";
+  if (hash.length < 2) return;
+  const id = hash.slice(1);
+  if (!document.getElementById(id)) return;
+  e.preventDefault();
+  smoothScrollToId(id);
+}
 
 /* Появление секций при скролле */
 function useReveal() {
@@ -163,7 +262,6 @@ function Header() {
   const [open, setOpen] = useState(false);
   const [menu, setMenu] = useState<number | null>(null);
   const [solid, setSolid] = useState(false);
-  const [lang, setLang] = useState<"РУС" | "ENG">("РУС");
 
   useEffect(() => {
     const onScroll = () => setSolid(window.scrollY > 20);
@@ -221,19 +319,6 @@ function Header() {
         </nav>
 
         <div className="hidden items-center gap-4 lg:flex">
-          <div className="flex items-center gap-1 text-xs font-semibold text-[var(--osb-muted)]">
-            {(["РУС", "ENG"] as const).map((l) => (
-              <button
-                key={l}
-                onClick={() => setLang(l)}
-                className={`rounded-full px-2 py-1 transition-colors ${
-                  lang === l ? "text-[var(--osb-ink)]" : "hover:text-[var(--osb-ink-soft)]"
-                }`}
-              >
-                {l}
-              </button>
-            ))}
-          </div>
           <a href={brand.phoneHref} className="text-sm font-semibold text-[var(--osb-ink)] osb-num">
             {brand.phone}
           </a>
@@ -393,19 +478,6 @@ function useOutside(onClose: () => void) {
  * Фильтры и умный поиск работают на клиенте поверх полного списка (429 лотов).
  */
 
-const PRICE_BANDS = [
-  { key: "до 200 млн ₽", min: 0, max: 200_000_000 },
-  { key: "200–500 млн ₽", min: 200_000_000, max: 500_000_000 },
-  { key: "500 млн – 1 млрд ₽", min: 500_000_000, max: 1_000_000_000 },
-  { key: "от 1 млрд ₽", min: 1_000_000_000, max: Infinity },
-] as const;
-
-const FLOOR_BANDS = [
-  { key: "1–2 этажа", min: 1, max: 2 },
-  { key: "3–4 этажа", min: 3, max: 4 },
-  { key: "от 5 этажей", min: 5, max: Infinity },
-] as const;
-
 const SORTS = [
   { value: "featured", label: "Сначала «Выбор Whitewill»" },
   { value: "price_asc", label: "Дешевле" },
@@ -413,162 +485,6 @@ const SORTS = [
   { value: "area_desc", label: "Больше площадь" },
   { value: "area_asc", label: "Меньше площадь" },
 ] as const;
-
-const SEARCH_SUGGEST = [
-  "Особняк под ресторан",
-  "Здание под клинику до 500 млн",
-  "Аренда особняка под офис",
-  "Резиденция в Хамовниках",
-];
-
-type Filters = {
-  deal: "sale" | "rent" | null;
-  purpose: string[];
-  district: string[];
-  price: string[];
-  floors: string[];
-};
-
-const EMPTY_FILTERS: Filters = { deal: null, purpose: [], district: [], price: [], floors: [] };
-
-const filtersActive = (f: Filters, text: string) =>
-  f.deal != null ||
-  f.purpose.length > 0 ||
-  f.district.length > 0 ||
-  f.price.length > 0 ||
-  f.floors.length > 0 ||
-  text.trim().length > 0;
-
-const dealLabel = (d: "sale" | "rent") => (d === "rent" ? "Аренда" : "Продажа");
-
-function priceInBand(price: number, key: string): boolean {
-  const b = PRICE_BANDS.find((x) => x.key === key);
-  if (!b) return false;
-  return price >= b.min && (b.max === Infinity || price < b.max);
-}
-function floorInBand(floors: number, key: string): boolean {
-  const b = FLOOR_BANDS.find((x) => x.key === key);
-  if (!b) return false;
-  return floors >= b.min && (b.max === Infinity || floors <= b.max);
-}
-
-/** Единое правило отбора: structured-фильтры (AND между группами, OR внутри) + полнотекст */
-function lotMatches(l: Mansion, f: Filters, text: string): boolean {
-  if (f.deal && l.deal !== f.deal) return false;
-  if (f.purpose.length && !f.purpose.includes(l.purpose)) return false;
-  if (f.district.length && !f.district.includes(l.district)) return false;
-  if (f.price.length) {
-    if (l.price == null) return false;
-    if (!f.price.some((k) => priceInBand(l.price!, k))) return false;
-  }
-  if (f.floors.length) {
-    if (l.floors == null) return false;
-    if (!f.floors.some((k) => floorInBand(l.floors!, k))) return false;
-  }
-  const t = text.trim().toLowerCase();
-  if (t) {
-    const hay = `${l.title} ${l.address} ${l.district} ${l.purpose} ${l.description}`.toLowerCase();
-    for (const tok of t.split(/\s+/).filter(Boolean)) if (!hay.includes(tok)) return false;
-  }
-  return true;
-}
-
-function sortLots(lots: Mansion[], sort: string): Mansion[] {
-  const arr = [...lots];
-  switch (sort) {
-    case "price_asc":
-      return arr.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
-    case "price_desc":
-      return arr.sort((a, b) => (b.price ?? -Infinity) - (a.price ?? -Infinity));
-    case "area_desc":
-      return arr.sort((a, b) => (b.area ?? 0) - (a.area ?? 0));
-    case "area_asc":
-      return arr.sort((a, b) => (a.area ?? Infinity) - (b.area ?? Infinity));
-    default:
-      return arr.sort((a, b) => Number(b.featured) - Number(a.featured));
-  }
-}
-
-/* Назначение по ключевым словам — значения совпадают с реальной таксономией API */
-const PURPOSE_KEYWORDS: [RegExp, string][] = [
-  [/ресторан|кафе|общепит|\bбар\b/i, "ресторан"],
-  [/клиник|медиц|стоматолог|бьюти|космет/i, "медицинский центр / клиника"],
-  [/банк/i, "банк"],
-  [/представит|посольств|штаб|консульств/i, "представительство / штаб-квартира"],
-  [/офис|бизнес[\s-]?центр|\bбц\b/i, "офис / бизнес-центр"],
-  [/отел|гостиниц/i, "отель / гостиница"],
-  [/хостел/i, "хостел"],
-  [/резиден|жил|для жизни|усадьб|особняк для себя/i, "жилой особняк / резиденция"],
-  [/реконструкц/i, "под реконструкцию"],
-  [/редевелоп/i, "редевелопмент"],
-  [/образоват|школ|универ|колледж|детский сад|садик|гимназ/i, "образовательное учреждение"],
-  [/арендн|готовый бизнес/i, "арендный бизнес"],
-];
-
-/** Разбор свободного запроса → структурные фильтры + чипы «Эксперт понял» */
-function parseSearch(
-  raw: string,
-  facets: { districts: string[]; purposes: string[] },
-): { filters: Filters; text: string; chips: string[] } | null {
-  const text = raw.trim();
-  if (!text) return null;
-  const low = text.toLowerCase();
-
-  let deal: "sale" | "rent" | null = null;
-  if (/аренд|снять|сним|в аренду/.test(low)) deal = "rent";
-  else if (/куп|продаж|покупк|приобрес|приобрет/.test(low)) deal = "sale";
-
-  const purpose: string[] = [];
-  for (const [re, value] of PURPOSE_KEYWORDS) {
-    if (re.test(low) && facets.purposes.includes(value) && !purpose.includes(value)) purpose.push(value);
-  }
-
-  // Район: точное вхождение + сопоставление по основе, чтобы ловить падежи
-  // («в Хамовниках» → Хамовники, «на Арбате» → Арбат).
-  const tokens = low.split(/[^a-zа-яё0-9]+/i).filter(Boolean);
-  const district = facets.districts.filter((d) => {
-    const dl = d.toLowerCase();
-    if (low.includes(dl)) return true;
-    if (dl.includes(" ") || dl.includes("-")) return false; // составные — только точно
-    const stem = dl.slice(0, Math.max(4, dl.length - 2));
-    return tokens.some((t) => t.startsWith(stem) && Math.abs(t.length - dl.length) <= 3);
-  });
-
-  const num = (re: RegExp): number | undefined => {
-    const m = low.match(re);
-    if (!m) return undefined;
-    const n = parseFloat(m[1].replace(/\s/g, "").replace(",", "."));
-    if (Number.isNaN(n)) return undefined;
-    return n * (m[2].startsWith("млрд") ? 1e9 : 1e6);
-  };
-  let pmax = num(/до\s*([\d\s.,]+)\s*(млрд|млн)/);
-  const pmin = num(/от\s*([\d\s.,]+)\s*(млрд|млн)/);
-  if (pmax == null && pmin == null) {
-    const any = num(/([\d\s.,]+)\s*(млрд|млн)/);
-    if (any != null) pmax = any;
-  }
-  let price: string[] = [];
-  if (pmax != null || pmin != null) {
-    price = PRICE_BANDS.filter(
-      (b) =>
-        (pmax == null || b.min < pmax) &&
-        (pmin == null || b.max === Infinity || b.max > pmin),
-    ).map((b) => b.key);
-  }
-
-  const structured = !!deal || purpose.length > 0 || district.length > 0 || price.length > 0;
-  const filters: Filters = { deal, purpose, district, price, floors: [] };
-
-  const chips: string[] = [];
-  if (deal) chips.push(`Сделка · ${dealLabel(deal)}`);
-  purpose.forEach((p) => chips.push(`Назначение · ${p}`));
-  district.forEach((d) => chips.push(`Район · ${d}`));
-  price.forEach((p) => chips.push(`Цена · ${p}`));
-  // если ничего структурного — ищем по тексту, иначе текст не дублируем в фильтр
-  if (!structured) chips.push(`Поиск · «${text}»`);
-
-  return { filters, text: structured ? "" : text, chips };
-}
 
 /** Хук загрузки каталога особняков */
 function useMansions() {
@@ -664,9 +580,7 @@ function MultiPill({
 function MansionCard({ l, rail = false }: { l: Mansion; rail?: boolean }) {
   return (
     <a
-      href={l.lotLink}
-      target="_blank"
-      rel="noopener noreferrer"
+      href={`/osobnyaki-c/lots/${l.id}`}
       className={`osb-card group flex flex-col overflow-hidden ${rail ? "osb-cat-card" : ""}`}
     >
       <div className="osb-media aspect-[4/3]">
@@ -859,6 +773,7 @@ function Catalog() {
   const [text, setText] = useState("");
   const [query, setQuery] = useState("");
   const [understood, setUnderstood] = useState<string[] | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
   const [sort, setSort] = useState<string>("featured");
   const [limit, setLimit] = useState(PER_PAGE);
 
@@ -900,8 +815,7 @@ function Catalog() {
     setUnderstood(null);
   };
 
-  const runSearch = (raw: string) => {
-    const parsed = parseSearch(raw, facets);
+  const applyParsed = (parsed: ParsedSearch | null) => {
     if (!parsed) {
       setText("");
       setFilters(EMPTY_FILTERS);
@@ -911,10 +825,34 @@ function Catalog() {
     setFilters({ ...EMPTY_FILTERS, ...parsed.filters });
     setText(parsed.text);
     setUnderstood(parsed.chips);
+    requestAnimationFrame(() => smoothScrollToId("catalog-results"));
+  };
+
+  /**
+   * Умный поиск: сначала LLM (/api/osobnyaki/assistant) — понимает синонимы,
+   * опечатки и нечёткие формулировки и сам раскладывает запрос на фильтры.
+   * Если AI недоступен (нет ключа / ошибка / таймаут) — мгновенный откат на
+   * локальный regex-парсер, чтобы поиск работал всегда.
+   */
+  const runSearch = async (raw: string) => {
+    const q = raw.trim();
+    if (!q || aiBusy) return;
     setQuery(raw);
-    requestAnimationFrame(() =>
-      document.getElementById("catalog-results")?.scrollIntoView({ behavior: "smooth", block: "start" }),
-    );
+    setAiBusy(true);
+    try {
+      const res = await fetch("/api/osobnyaki/assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: q, facets }),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      const parsed = (await res.json()) as ParsedSearch;
+      applyParsed(parsed);
+    } catch {
+      applyParsed(parseSearch(q, facets)); // фолбэк на regex
+    } finally {
+      setAiBusy(false);
+    }
   };
 
   const activeChips: { group: keyof Filters; opt: string }[] = [
@@ -981,8 +919,12 @@ function Catalog() {
                   className="w-full rounded-full border border-[var(--osb-line-strong)] bg-[var(--osb-surface)] py-4 pr-32 text-[15px] text-[var(--osb-ink)] placeholder:text-[var(--osb-muted)] focus:border-[var(--osb-ink)] focus:outline-none"
                   style={{ paddingLeft: "3.25rem" }}
                 />
-                <button onClick={() => runSearch(query)} className="osb-btn osb-btn-primary absolute right-2 px-6 py-2.5">
-                  Найти
+                <button
+                  onClick={() => runSearch(query)}
+                  disabled={aiBusy}
+                  className="osb-btn osb-btn-primary absolute right-2 px-6 py-2.5 disabled:opacity-70"
+                >
+                  {aiBusy ? "Ищем…" : "Найти"}
                 </button>
               </div>
 
@@ -1236,11 +1178,13 @@ function Expert() {
             планами и честными ценами. Подбор и показы бесплатны.
           </p>
           <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <a href={brand.whatsapp} className="osb-btn bg-[var(--osb-paper)] px-7 py-3.5 text-[var(--osb-ink)] hover:bg-[var(--osb-paper-2)]">
+            <a href={brand.whatsapp} target="_blank" rel="noopener noreferrer" className="osb-btn bg-[var(--osb-paper)] px-7 py-3.5 text-[var(--osb-ink)] hover:bg-[var(--osb-paper-2)]">
               Заказать подбор особняка
             </a>
             <a
-              href="#sell"
+              href={brand.whatsappSell}
+              target="_blank"
+              rel="noopener noreferrer"
               className="osb-btn px-7 py-3.5 text-[var(--osb-surface)] ring-1 ring-inset ring-white/30 hover:ring-white/70"
             >
               Продать особняк
@@ -1287,6 +1231,92 @@ function Team() {
   );
 }
 
+/**
+ * Журнал: как на оригинале osobnyaki.com — скачивание PDF после короткой
+ * заявки (телефон + согласие). По сабмиту шлём лид и открываем реальный
+ * PDF-каталог. Закрытый файл с Cyrillic-именем кодируем через encodeURI.
+ */
+function MagazineForm() {
+  const [open, setOpen] = useState(false);
+  const [phone, setPhone] = useState("");
+  const [agree, setAgree] = useState(true);
+  const [state, setState] = useState<"idle" | "sending" | "done" | "error">("idle");
+  const pdfUrl = encodeURI(magazine.pdf);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (phone.replace(/[^\d+]/g, "").length < 10 || !agree) {
+      setState("error");
+      return;
+    }
+    setState("sending");
+    try {
+      await fetch("/api/lead", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, source: "magazine" }),
+      });
+    } catch {
+      /* лид — best-effort; PDF отдаём в любом случае */
+    }
+    setState("done");
+    window.open(pdfUrl, "_blank", "noopener,noreferrer");
+  };
+
+  if (state === "done") {
+    return (
+      <div className="mt-8">
+        <p className="text-[var(--osb-ink)]">
+          Спасибо! Журнал открывается в новой вкладке. Если загрузка не началась —{" "}
+          <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className="osb-link font-semibold">
+            скачать PDF вручную
+          </a>
+          .
+        </p>
+      </div>
+    );
+  }
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="osb-btn osb-btn-primary mt-8 px-7 py-3.5">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+          <path d="M12 4v11m0 0l-4-4m4 4l4-4M5 19h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        Скачать PDF · {magazine.size}
+      </button>
+    );
+  }
+
+  return (
+    <form onSubmit={submit} className="mt-8 max-w-md">
+      <p className="text-sm text-[var(--osb-ink-soft)]">
+        Оставьте телефон — пришлём журнал и подберём особняки под вашу задачу.
+      </p>
+      <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+        <input
+          type="tel"
+          value={phone}
+          onChange={(e) => { setPhone(e.target.value); if (state === "error") setState("idle"); }}
+          placeholder="+7 (___) ___-__-__"
+          aria-label="Телефон"
+          className="osb-num w-full rounded-full border border-[var(--osb-line-strong)] bg-[var(--osb-surface)] px-5 py-3.5 text-[15px] text-[var(--osb-ink)] placeholder:text-[var(--osb-muted)] focus:border-[var(--osb-ink)] focus:outline-none"
+        />
+        <button type="submit" disabled={state === "sending"} className="osb-btn osb-btn-primary shrink-0 px-7 py-3.5 disabled:opacity-60">
+          {state === "sending" ? "Отправляем…" : "Скачать"}
+        </button>
+      </div>
+      <label className="mt-3 flex items-start gap-2 text-xs text-[var(--osb-muted)]">
+        <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5" />
+        <span>Я согласен с политикой конфиденциальности и обработкой персональных данных</span>
+      </label>
+      {state === "error" && (
+        <p className="mt-2 text-xs text-red-600">Укажите корректный телефон и согласие с политикой.</p>
+      )}
+    </form>
+  );
+}
+
 function Magazine() {
   return (
     <section id="magazine" className="scroll-mt-24 mx-auto max-w-[1280px] px-5 py-20 md:px-8 md:py-28">
@@ -1305,12 +1335,7 @@ function Magazine() {
             <span className="h-1 w-1 rounded-full bg-[var(--osb-bronze)]" />
             <span className="osb-num">{magazine.updated}</span>
           </div>
-          <a href="#expert" className="osb-btn osb-btn-primary mt-8 px-7 py-3.5">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path d="M12 4v11m0 0l-4-4m4 4l4-4M5 19h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            Скачать PDF
-          </a>
+          <MagazineForm />
         </div>
       </div>
     </section>
@@ -1424,29 +1449,6 @@ function Footer() {
   );
 }
 
-function CookieBar() {
-  const [show, setShow] = useState(true);
-  if (!show) return null;
-  return (
-    <div className="fixed inset-x-3 bottom-3 z-[60] mx-auto max-w-3xl">
-      <div className="osb-card flex flex-col items-start gap-3 bg-[var(--osb-surface)]/95 p-4 shadow-[var(--osb-shadow-lg)] backdrop-blur-xl sm:flex-row sm:items-center sm:gap-4 sm:p-5">
-        <p className="flex-1 text-sm text-[var(--osb-ink-soft)]">
-          Этот сайт использует cookie, чтобы каталог особняков работал удобнее. Продолжая
-          просмотр, вы соглашаетесь с политикой конфиденциальности.
-        </p>
-        <div className="flex shrink-0 items-center gap-2">
-          <a href="#footer" className="osb-link text-sm font-semibold">
-            Узнать больше
-          </a>
-          <button onClick={() => setShow(false)} className="osb-btn osb-btn-primary px-5 py-2.5">
-            Принять
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function OsobnyakiLanding() {
   const ref = useRef<HTMLDivElement>(null);
   useReveal();
@@ -1454,20 +1456,30 @@ export function OsobnyakiLanding() {
   useEffect(() => {
     import("@google/model-viewer").catch(() => {});
   }, []);
+  // Глубокая ссылка с хэшем (переход с подстраницы лота на /osobnyaki-c#catalog)
+  // — доводим надёжным скроллом после монтирования: секции/каталог появляются
+  // не сразу, нативный якорь промахивается.
+  useEffect(() => {
+    const id = window.location.hash.slice(1);
+    if (!id) return;
+    const t = setTimeout(() => {
+      if (document.getElementById(id)) smoothScrollToId(id);
+    }, 350);
+    return () => clearTimeout(t);
+  }, []);
   return (
-    <div className="osb" ref={ref}>
+    <div className="osb" ref={ref} onClickCapture={onAnchorClick}>
       <Header />
       <main>
         <Hero />
-        <Catalog />
         <Collections />
+        <Catalog />
         <Expert />
         <Team />
         <Magazine />
         <Blog />
       </main>
       <Footer />
-      <CookieBar />
     </div>
   );
 }

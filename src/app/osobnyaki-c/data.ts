@@ -22,6 +22,10 @@ export const brand = {
   whatsapp:
     "https://api.whatsapp.com/send?phone=79296021757&text=" +
     encodeURIComponent("Здравствуйте! Интересует особняк в Москве."),
+  // тот же WhatsApp, но с сообщением для собственника (раздела «Продать» нет)
+  whatsappSell:
+    "https://api.whatsapp.com/send?phone=79296021757&text=" +
+    encodeURIComponent("Здравствуйте! Хочу продать особняк в Москве."),
   // число реально доступных объектов из живого API (mansions). На самом
   // osobnyaki.com headline-счётчик больше (944) — там собственная база.
   found: 429,
@@ -50,7 +54,7 @@ export const nav = [
     label: "Услуги",
     items: [
       { label: "Подбор за 25 минут", href: "#expert", note: "бесплатно, 2–5 особняков" },
-      { label: "Продать особняк", href: "#sell", note: "от собственника" },
+      { label: "Продать особняк", href: brand.whatsappSell, note: "от собственника" },
       { label: "Реставрация и ОКН", href: "#blog", note: "сопровождение" },
       { label: "Юридическая проверка", href: "#expert", note: "due diligence" },
     ],
@@ -269,6 +273,8 @@ export const magazine = {
   // реальное фото особняка с osobnyaki.com вместо стокового
   cover:
     "https://osobnyaki.com/assets/images/products/4447/1744826511-67fff08f7042b-volhovskiy-pereulok-16-20s1.png",
+  // реальный PDF-каталог с оригинала osobnyaki.com (отдаётся после заявки)
+  pdf: "https://osobnyaki.com/assets/content/_Каталог особняков на продажу.pdf",
 };
 
 /** Блог. */
@@ -317,7 +323,7 @@ export const footerCols = [
     title: "Сервис",
     links: [
       { label: "Подбор за 25 минут", href: "#expert" },
-      { label: "Продать особняк", href: "#sell" },
+      { label: "Продать особняк", href: brand.whatsappSell },
       { label: "Команда", href: "#team" },
       { label: "Блог", href: "#blog" },
     ],
